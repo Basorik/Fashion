@@ -1,8 +1,8 @@
 import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import { Tabs } from 'expo-router/js-tabs';
-import type { ColorValue } from 'react-native';
+import { StyleSheet, View, type ColorValue } from 'react-native';
 
-import { AddButton } from '@/components/add-button';
+import { AddButton, HeaderTextButton } from '@/components/add-button';
 
 function tabIcon(name: SymbolViewProps['name']) {
   function TabIcon({ color, size }: { color: ColorValue; size: number }) {
@@ -26,7 +26,12 @@ export default function TabsLayout() {
         name="outfits"
         options={{
           title: 'Outfits',
-          headerRight: () => <AddButton href="/new-outfit" label="New outfit" />,
+          headerRight: () => (
+            <View style={styles.headerButtons}>
+              <HeaderTextButton href="/shuffle" label="Shuffle" />
+              <AddButton href="/new-outfit" label="New outfit" />
+            </View>
+          ),
           tabBarIcon: tabIcon({ ios: 'square.stack', android: 'style', web: 'style' }),
         }}
       />
@@ -58,3 +63,10 @@ export default function TabsLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+});

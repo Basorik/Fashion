@@ -43,6 +43,10 @@ export default function RootLayout() {
             />
             <Stack.Screen name="outfit/[id]" options={{ title: '' }} />
             <Stack.Screen
+              name="shuffle"
+              options={{ title: 'Shuffle an outfit', presentation: 'modal' }}
+            />
+            <Stack.Screen
               name="outfit-board"
               options={{ title: 'Arrange outfit', presentation: 'modal' }}
             />
