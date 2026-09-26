@@ -2,7 +2,7 @@ import { File } from 'expo-file-system';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 
 import { Button } from '@/components/button';
@@ -19,48 +19,86 @@ import { today } from '@/lib/db';
 import { formatPrice } from '@/lib/money';
 import { parseOrderEmail, type Order } from '@/lib/order-email';
 import { addOrderItems, type OrderChoice } from '@/lib/order-import';
+import { onSharedEmail, takeSharedEmail } from '@/lib/share-intake';
 import { inferCategory } from '@/lib/tag-inference';
 
 type Row = OrderChoice & { key: string; selected: boolean };
 
+type Found = { ok: true; order: Order; rows: Row[] } | { ok: false; message: string };
+
+function findItems(input: string): Found {
+  const order = parseOrderEmail(input);
+  if (order.items.length === 0) {
+    return {
+      ok: false,
+      message:
+        "Couldn't find any items in that email. Copy the whole email, including the list of items, or open the saved email file.",
+    };
+  }
+  const rows = order.items.map((item, index) => ({
+    ...item,
+    key: String(index),
+    selected: true,
+    category: inferCategory({ name: item.name }) ?? 'Other',
+  }));
+  return { ok: true, order, rows };
+}
+
+// Plain text that couldn't be read is shown so it can be checked; HTML would be noise.
+function shownText(input: string) {
+  return /<[a-z][^>]*>/i.test(input) ? '' : input;
+}
+
 // Adds the items from an order confirmation email: the user pastes the email's
-// text or opens a saved .eml file, then picks which of the items found to add.
+// text, opens a saved .eml file or shares the email to Bella from a mail app,
+// then picks which of the items found to add.
 export default function ImportOrderScreen() {
   const db = useSQLiteContext();
   const theme = useTheme();
-  const [text, setText] = useState('');
-  const [message, setMessage] = useState<string | null>(null);
-  const [order, setOrder] = useState<Order | null>(null);
-  const [rows, setRows] = useState<Row[]>([]);
+  // An email shared to Bella that opened this screen.
+  const [shared] = useState(() => {
+    const input = takeSharedEmail();
+    return input ? { input, found: findItems(input) } : null;
+  });
+  const first = shared?.found;
+  const [text, setText] = useState(shared && !first?.ok ? shownText(shared.input) : '');
+  const [message, setMessage] = useState<string | null>(first && !first.ok ? first.message : null);
+  const [order, setOrder] = useState<Order | null>(first?.ok ? first.order : null);
+  const [rows, setRows] = useState<Row[]>(first?.ok ? first.rows : []);
   const [editing, setEditing] = useState<string | null>(null);
-  const [store, setStore] = useState('');
-  const [purchasedOn, setPurchasedOn] = useState('');
+  const [store, setStore] = useState(first?.ok ? (first.order.shop ?? '') : '');
+  const [purchasedOn, setPurchasedOn] = useState(first?.ok ? (first.order.orderedOn ?? '') : '');
   const [lookUpLinks, setLookUpLinks] = useState(true);
   const [progress, setProgress] = useState<string | null>(null);
   const [saving, runSave] = useBusy();
   const [opening, runOpen] = useBusy();
 
   function read(input: string) {
-    const found = parseOrderEmail(input);
-    if (found.items.length === 0) {
-      setMessage(
-        "Couldn't find any items in that email. Copy the whole email, including the list of items, or open the saved email file.",
-      );
+    const found = findItems(input);
+    setEditing(null);
+    if (!found.ok) {
+      setOrder(null);
+      setMessage(found.message);
       return;
     }
     setMessage(null);
-    setOrder(found);
-    setStore(found.shop ?? '');
-    setPurchasedOn(found.orderedOn ?? '');
-    setRows(
-      found.items.map((item, index) => ({
-        ...item,
-        key: String(index),
-        selected: true,
-        category: inferCategory({ name: item.name }) ?? 'Other',
-      })),
-    );
+    setOrder(found.order);
+    setStore(found.order.shop ?? '');
+    setPurchasedOn(found.order.orderedOn ?? '');
+    setRows(found.rows);
   }
+
+  // Another email shared to Bella while this screen is open replaces this one.
+  useEffect(
+    () =>
+      onSharedEmail(() => {
+        const input = takeSharedEmail();
+        if (!input) return;
+        setText(shownText(input));
+        read(input);
+      }),
+    [],
+  );
 
   function openFile() {
     runOpen(async () => {

@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { Colors } from '@/constants/theme';
 import { DATABASE_NAME, migrate } from '@/lib/db';
+import { useShareIntake } from '@/lib/share-intake';
 
 // Headers, tab bars and screen backgrounds in Bella's colors.
 function navigationTheme(scheme: 'light' | 'dark'): Theme {
@@ -60,6 +61,7 @@ function useNotificationLinks() {
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   useNotificationLinks();
+  useShareIntake();
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider value={colorScheme === 'dark' ? themes.dark : themes.light}>
