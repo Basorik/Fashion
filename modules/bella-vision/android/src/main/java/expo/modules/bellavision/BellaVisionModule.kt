@@ -88,8 +88,10 @@ class BellaVisionModule : Module() {
     val parsed = Uri.parse(uri)
     val resolver = context.contentResolver
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    resolver.openInputStream(parsed)?.use { BitmapFactory.decodeStream(it, null, bounds) }
-      ?: throw ImageLoadException()
+    // With inJustDecodeBounds the decode returns null and only fills in the size.
+    val stream = resolver.openInputStream(parsed) ?: throw ImageLoadException()
+    stream.use { BitmapFactory.decodeStream(it, null, bounds) }
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw ImageLoadException()
     var sampleSize = 1
     while (maxOf(bounds.outWidth, bounds.outHeight) / (sampleSize * 2) >= MAX_SIDE) {
       sampleSize *= 2
