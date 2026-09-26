@@ -2,6 +2,7 @@ import { backupDatabaseAsync, deserializeDatabaseAsync, type SQLiteDatabase } fr
 import { unzipSync, zipSync, type Zippable } from 'fflate';
 
 import { migrate } from '@/lib/db';
+import { pickBrowserFile } from '@/lib/pick-browser-file';
 import { listPhotos, replacePhotos } from '@/lib/photos.web';
 
 // The web version of lib/backup. It writes and reads the same zip format, so
@@ -89,18 +90,6 @@ export async function exportBackup(
   return name;
 }
 
-// Opens the browser's file picker. Resolves with null if it's closed without a file.
-function pickFile() {
-  return new Promise<File | null>((resolve) => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.zip,application/zip';
-    input.onchange = () => resolve(input.files?.[0] ?? null);
-    input.oncancel = () => resolve(null);
-    input.click();
-  });
-}
-
 const photoTypes: Record<string, string> = { png: 'image/png', webp: 'image/webp' };
 
 // Only plain file names inside photos/ are read, as on the phone.
@@ -115,7 +104,7 @@ function photoName(path: string) {
 // Asks for a backup file, checks it and upgrades its data to the current
 // schema. Nothing in the app changes until applyRestore.
 export async function readBackup(db: SQLiteDatabase): Promise<PendingRestore | null> {
-  const file = await pickFile();
+  const file = await pickBrowserFile('.zip,application/zip');
   if (!file) return null;
 
   let entries: Record<string, Uint8Array>;

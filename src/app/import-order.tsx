@@ -1,4 +1,3 @@
-import { File } from 'expo-file-system';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -20,6 +19,7 @@ import { today } from '@/lib/db';
 import { formatPrice } from '@/lib/money';
 import { parseOrderEmail, type Order } from '@/lib/order-email';
 import { addOrderItems, type OrderChoice } from '@/lib/order-import';
+import { pickTextFile } from '@/lib/pick-text-file';
 import { onSharedEmail, takeSharedEmail } from '@/lib/share-intake';
 import { inferCategory } from '@/lib/tag-inference';
 
@@ -103,9 +103,8 @@ export default function ImportOrderScreen() {
 
   function openFile() {
     runOpen(async () => {
-      const picked = await File.pickFileAsync();
-      if (picked.canceled) return;
-      const content = await picked.result.text();
+      const content = await pickTextFile();
+      if (content === null) return;
       setText('');
       read(content);
     }, "Couldn't open that file");
