@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { tapFeedback } from '@/lib/haptics';
 
 type Props = {
   label: string;
@@ -36,7 +37,10 @@ export function Chip({
       accessibilityRole={accessibilityRole}
       accessibilityState={accessibilityRole === 'checkbox' ? { checked: selected } : { selected }}
       accessibilityLabel={accessibilityLabel ?? label}
-      onPress={onPress}
+      onPress={() => {
+        tapFeedback();
+        onPress();
+      }}
       hitSlop={4}
       style={({ pressed }) => [style, pressed && { opacity: 0.7 }]}>
       {text}

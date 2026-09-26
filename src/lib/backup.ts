@@ -4,6 +4,7 @@ import { Unzip, UnzipInflate, Zip, ZipDeflate, ZipPassThrough } from 'fflate';
 
 import { migrate } from '@/lib/db';
 import { photosDir } from '@/lib/photos';
+import { shareFile } from '@/lib/share';
 
 // A backup is a zip file holding:
 //   bella-backup.json  what's inside and which schema version made it
@@ -73,7 +74,41 @@ export async function exportBackup(
     if (isCancel(error)) return null;
     throw error;
   }
+  const name = backupFileName();
+  await writeBackup(db, folder.createFile(name, 'application/zip'), onProgress);
+  return name;
+}
 
+// Shared backups are written to the cache, because the share sheet only gets
+// the file's address and the app it goes to may read it after this returns.
+function shareDir() {
+  return new Directory(Paths.cache, 'bella-share');
+}
+
+// Writes a backup to the cache and opens the share sheet, so it can go straight
+// to Drive, email, WhatsApp and so on. The previous shared copy is cleared first.
+export async function shareBackup(
+  db: SQLiteDatabase,
+  onProgress?: (done: number, total: number) => void,
+) {
+  const dir = shareDir();
+  if (dir.exists) dir.delete();
+  dir.create({ intermediates: true });
+  const target = new File(dir, backupFileName());
+  target.create();
+  await writeBackup(db, target, onProgress);
+  await shareFile(target.uri, {
+    mimeType: 'application/zip',
+    UTI: 'public.zip-archive',
+    dialogTitle: 'Send Bella backup',
+  });
+}
+
+async function writeBackup(
+  db: SQLiteDatabase,
+  target: File,
+  onProgress?: (done: number, total: number) => void,
+) {
   const manifest: Manifest = {
     app: 'bella',
     format: FORMAT,
@@ -84,8 +119,6 @@ export async function exportBackup(
   const dir = photosDir();
   const photos = dir.exists ? dir.list().filter((entry) => entry instanceof File) : [];
 
-  const name = backupFileName();
-  const target = folder.createFile(name, 'application/zip');
   const handle = target.open(FileMode.WriteOnly);
   let failed = false;
   try {
@@ -114,7 +147,6 @@ export async function exportBackup(
     handle.close();
     if (failed && target.exists) target.delete();
   }
-  return name;
 }
 
 // The manifest and database are unpacked into the cache. Photos are unpacked
