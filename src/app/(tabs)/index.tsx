@@ -23,7 +23,9 @@ import { statusLabel } from '@/constants/item-status';
 import { Radius, Spacing } from '@/constants/theme';
 import { useBusy } from '@/hooks/use-busy';
 import { useTheme } from '@/hooks/use-theme';
-import { clearWashStatus, listItems, type ItemWithStats } from '@/lib/db';
+import { formatShortDay } from '@/lib/dates';
+import { clearWashStatus, listItems, today, type ItemWithStats } from '@/lib/db';
+import { formatPrice } from '@/lib/money';
 import {
   matchesShow,
   sortItems,
@@ -161,6 +163,8 @@ export default function WardrobeScreen() {
               accessibilityLabel={[
                 item.name,
                 `worn ${item.wearCount} times`,
+                costPerWearLabel(item),
+                lastWornLabel(item),
                 item.status && statusLabel(item.status, item.lentTo),
               ]
                 .filter(Boolean)
@@ -172,11 +176,14 @@ export default function WardrobeScreen() {
                 style={[styles.tile, { width: tileSize, height: tileSize * 1.25 }]}
               />
               {item.status && <StatusBadge status={item.status} lentTo={item.lentTo} />}
-              <ThemedText type="small" numberOfLines={1}>
-                {item.name}
+              <ThemedText type="smallBold" numberOfLines={1}>
+                Worn {item.wearCount}×
               </ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
-                {item.wearCount === 0 ? 'Not worn yet' : `Worn ${item.wearCount}×`}
+              <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+                {costPerWearLabel(item)}
+              </ThemedText>
+              <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+                {lastWornLabel(item)}
               </ThemedText>
             </Pressable>
           </Link>
@@ -184,6 +191,16 @@ export default function WardrobeScreen() {
       />
     </ThemedView>
   );
+}
+
+// Unworn items cost their whole price per wear so far (matches the cost-per-wear sort).
+function costPerWearLabel(item: ItemWithStats) {
+  if (item.price === null) return 'No price';
+  return `${formatPrice(item.price / Math.max(item.wearCount, 1))} per wear`;
+}
+
+function lastWornLabel(item: ItemWithStats) {
+  return item.lastWorn ? `Last ${formatShortDay(item.lastWorn, today())}` : 'Never worn';
 }
 
 function ChipRow<T extends string>({

@@ -49,6 +49,20 @@ export function formatDate(value: string) {
   });
 }
 
+// "today", "yesterday", "3 days ago", then "12 Sep" (with the year if it isn't this year).
+export function formatShortDay(value: string, today: string) {
+  const days = daysBetween(value, today);
+  if (days === 0) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days > 1 && days < 7) return `${days} days ago`;
+  const date = fromDateString(value);
+  return date.toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    ...(date.getFullYear() === fromDateString(today).getFullYear() ? {} : { year: 'numeric' }),
+  });
+}
+
 export function formatMonth(year: number, month: number) {
   return new Date(year, month, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
 }
