@@ -28,6 +28,10 @@ export type Item = {
   // history but are hidden from the wardrobe, suggestions and pickers.
   archivedAt: string | null;
   createdAt: string;
+  // Set when the item has been taken out of the wardrobe (see removeItem).
+  removedOn: string | null;
+  removedReason: string | null;
+  removedNote: string | null;
 };
 
 export type ItemWithStats = Item & {
@@ -213,9 +217,30 @@ export async function migrate(db: SQLiteDatabase) {
   }
 
   if (version < 5) {
+    // Removing an item keeps it (and its wears) but hides it from the wardrobe,
+    // with the reason it went. Settings hold single values like the user's color season.
     await upgrade(
       db,
       5,
+      `
+      ALTER TABLE items ADD COLUMN removed_on TEXT;
+      ALTER TABLE items ADD COLUMN removed_reason TEXT;
+      ALTER TABLE items ADD COLUMN removed_note TEXT;
+      CREATE TABLE settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+    `,
+    );
+    version = 5;
+  }
+
+  if (version < 6) {
+    // Notes and purchase details, where the item is (laundry, dry cleaner, lent),
+    // and archiving, which hides an item for a while (e.g. off-season) without removing it.
+    await upgrade(
+      db,
+      6,
       `
       ALTER TABLE items ADD COLUMN notes TEXT;
       ALTER TABLE items ADD COLUMN store TEXT;
@@ -225,8 +250,27 @@ export async function migrate(db: SQLiteDatabase) {
       ALTER TABLE items ADD COLUMN archived_at TEXT;
     `,
     );
-    version = 5;
+    version = 6;
   }
+}
+
+export async function getSetting(db: SQLiteDatabase, key: string) {
+  const row = await db.getFirstAsync<{ value: string }>(
+    'SELECT value FROM settings WHERE key = ?',
+    key,
+  );
+  return row?.value ?? null;
+}
+
+export async function setSetting(db: SQLiteDatabase, key: string, value: string | null) {
+  if (value === null) await db.runAsync('DELETE FROM settings WHERE key = ?', key);
+  else
+    await db.runAsync(
+      `INSERT INTO settings (key, value) VALUES (?, ?)
+       ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
+      key,
+      value,
+    );
 }
 
 const itemWithStatsQuery = `
@@ -245,6 +289,9 @@ const itemWithStatsQuery = `
     items.lent_to AS lentTo,
     items.archived_at AS archivedAt,
     items.created_at AS createdAt,
+    items.removed_on AS removedOn,
+    items.removed_reason AS removedReason,
+    items.removed_note AS removedNote,
     COUNT(wears.id) AS wearCount,
     MAX(wears.worn_on) AS lastWorn,
     (SELECT group_concat(value, ' ') FROM item_tags WHERE item_id = items.id) AS tagText
@@ -252,15 +299,25 @@ const itemWithStatsQuery = `
   LEFT JOIN wears ON wears.item_id = items.id
 `;
 
+// Items still in the wardrobe; removed ones are listed by listRemovedItems.
 export function listItems(db: SQLiteDatabase, category?: Category) {
   if (category) {
     return db.getAllAsync<ItemWithStats>(
-      `${itemWithStatsQuery} WHERE items.category = ? GROUP BY items.id ORDER BY items.id DESC`,
+      `${itemWithStatsQuery} WHERE items.removed_on IS NULL AND items.category = ?
+       GROUP BY items.id ORDER BY items.id DESC`,
       category,
     );
   }
   return db.getAllAsync<ItemWithStats>(
-    `${itemWithStatsQuery} GROUP BY items.id ORDER BY items.id DESC`,
+    `${itemWithStatsQuery} WHERE items.removed_on IS NULL GROUP BY items.id ORDER BY items.id DESC`,
+  );
+}
+
+// Items taken out of the wardrobe, most recently removed first.
+export function listRemovedItems(db: SQLiteDatabase) {
+  return db.getAllAsync<ItemWithStats>(
+    `${itemWithStatsQuery} WHERE items.removed_on IS NOT NULL
+     GROUP BY items.id ORDER BY items.removed_on DESC, items.id DESC`,
   );
 }
 
@@ -338,6 +395,23 @@ export async function updateItem(db: SQLiteDatabase, id: number, item: ItemInput
   });
 }
 
+// Takes an item out of the wardrobe. Its wears, outfits and stats are kept, so
+// it can be put back with restoreItem.
+export async function removeItem(
+  db: SQLiteDatabase,
+  id: number,
+  reason: string,
+  note: string | null,
+) {
+  await db.runAsync(
+    'UPDATE items SET removed_on = ?, removed_reason = ?, removed_note = ? WHERE id = ?',
+    today(),
+    reason,
+    note,
+    id,
+  );
+}
+
 // Marks where an item is (laundry, dry cleaner, lent), or back in the wardrobe with null.
 export async function setItemStatus(
   db: SQLiteDatabase,
@@ -362,6 +436,14 @@ export async function setItemArchived(db: SQLiteDatabase, id: number, archived: 
   await db.runAsync('UPDATE items SET archived_at = ? WHERE id = ?', archived ? today() : null, id);
 }
 
+export async function restoreItem(db: SQLiteDatabase, id: number) {
+  await db.runAsync(
+    'UPDATE items SET removed_on = NULL, removed_reason = NULL, removed_note = NULL WHERE id = ?',
+    id,
+  );
+}
+
+// Deletes the item and its wear history for good.
 export async function deleteItem(db: SQLiteDatabase, id: number) {
   await db.runAsync('DELETE FROM items WHERE id = ?', id);
 }
@@ -531,7 +613,8 @@ export async function deleteOutfit(db: SQLiteDatabase, id: number) {
 }
 
 // Logs the outfit as worn and adds a wear to each of its items. Items already
-// logged as worn that day are skipped so a day is never counted twice.
+// logged as worn that day are skipped so a day is never counted twice, and
+// removed items are skipped because they're no longer in the wardrobe.
 export async function logOutfitWear(db: SQLiteDatabase, outfitId: number, wornOn = today()) {
   await db.withTransactionAsync(async () => {
     const result = await db.runAsync(
@@ -543,7 +626,8 @@ export async function logOutfitWear(db: SQLiteDatabase, outfitId: number, wornOn
       `INSERT INTO wears (item_id, worn_on, outfit_wear_id)
        SELECT item_id, ?, ? FROM outfit_items
        WHERE outfit_id = ?
-         AND item_id NOT IN (SELECT item_id FROM wears WHERE worn_on = ?)`,
+         AND item_id NOT IN (SELECT item_id FROM wears WHERE worn_on = ?)
+         AND item_id IN (SELECT id FROM items WHERE removed_on IS NULL)`,
       wornOn,
       result.lastInsertRowId,
       outfitId,

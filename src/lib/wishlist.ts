@@ -152,7 +152,9 @@ export type OwnedItem = Pick<Item, 'id' | 'name' | 'photo' | 'category'> & { tag
 
 export async function listOwnedWithTags(db: SQLiteDatabase): Promise<OwnedItem[]> {
   const [items, tags] = await Promise.all([
-    db.getAllAsync<Omit<OwnedItem, 'tags'>>('SELECT id, name, photo, category FROM items'),
+    db.getAllAsync<Omit<OwnedItem, 'tags'>>(
+      'SELECT id, name, photo, category FROM items WHERE removed_on IS NULL',
+    ),
     db.getAllAsync<Tag & { itemId: number }>(
       'SELECT item_id AS itemId, tag_group AS "group", value FROM item_tags',
     ),

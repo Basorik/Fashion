@@ -8,7 +8,10 @@ import { ItemPhoto } from '@/components/item-photo';
 import { Stat } from '@/components/stat';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { ColorSeasons } from '@/constants/color-seasons';
 import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
+import { getColorSeasonOverview, type ColorSeasonOverview } from '@/lib/color-seasons';
 import { fromDateString } from '@/lib/dates';
 import { formatPrice } from '@/lib/money';
 import { getWardrobeStats, type WardrobeStats } from '@/lib/stats';
@@ -17,11 +20,14 @@ const money = (value: number) => formatPrice(Math.round(value));
 
 export default function StatsScreen() {
   const db = useSQLiteContext();
+  const theme = useTheme();
   const [stats, setStats] = useState<WardrobeStats | null>(null);
+  const [seasons, setSeasons] = useState<ColorSeasonOverview | null>(null);
 
   useFocusEffect(
     useCallback(() => {
       getWardrobeStats(db).then(setStats);
+      getColorSeasonOverview(db).then(setSeasons);
     }, [db]),
   );
 
@@ -72,6 +78,37 @@ export default function StatsScreen() {
             <BarList rows={stats.byColor.map(({ label, count }) => ({ label, value: count }))} />
           </Section>
         )}
+
+        <Section title="Color season">
+          <Link href="/color-season" asChild>
+            <Pressable
+              accessibilityRole="button"
+              style={({ pressed }) => [
+                styles.seasonCard,
+                { backgroundColor: theme.backgroundElement },
+                pressed && styles.pressed,
+              ]}>
+              <ThemedText type="smallBold">
+                {seasons?.mine
+                  ? `You're a ${seasons.mine}: ${seasons.counts[seasons.mine]} item${
+                      seasons.counts[seasons.mine] === 1 ? '' : 's'
+                    } in your shades`
+                  : 'Pick your color season'}
+              </ThemedText>
+              <ThemedText type="small" style={{ color: theme.accent }}>
+                {seasons?.mine ? 'See them ›' : 'See which clothes suit your coloring ›'}
+              </ThemedText>
+            </Pressable>
+          </Link>
+          {seasons && ColorSeasons.some((season) => seasons.counts[season] > 0) && (
+            <BarList
+              rows={ColorSeasons.map((season) => ({
+                label: season,
+                value: seasons.counts[season],
+              }))}
+            />
+          )}
+        </Section>
 
         {stats.spendingByMonth.length > 0 && (
           <Section title="Spending by month added">
@@ -158,6 +195,14 @@ const styles = StyleSheet.create({
   },
   section: {
     gap: Spacing.two,
+  },
+  seasonCard: {
+    borderRadius: Radius.medium,
+    padding: Spacing.three,
+    gap: Spacing.one,
+  },
+  pressed: {
+    opacity: 0.7,
   },
   items: {
     gap: Spacing.two,

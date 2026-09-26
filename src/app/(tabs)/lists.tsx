@@ -10,11 +10,12 @@ import { ThemedView } from '@/components/themed-view';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { formatDay } from '@/lib/dates';
+import { listRemovedItems, type ItemWithStats } from '@/lib/db';
 import { formatPrice } from '@/lib/money';
 import { listTrips, type Trip } from '@/lib/trips';
 import { listWishesByFit, type WishWithMatches } from '@/lib/wishlist';
 
-type Tab = 'wishlist' | 'trips';
+type Tab = 'wishlist' | 'trips' | 'removed';
 
 export default function ListsScreen() {
   const db = useSQLiteContext();
@@ -22,17 +23,20 @@ export default function ListsScreen() {
   const [tab, setTab] = useState<Tab>('wishlist');
   const [wishes, setWishes] = useState<WishWithMatches[]>([]);
   const [trips, setTrips] = useState<Trip[]>([]);
+  const [removed, setRemoved] = useState<ItemWithStats[]>([]);
 
   useFocusEffect(
     useCallback(() => {
       listWishesByFit(db).then(setWishes);
       listTrips(db).then(setTrips);
+      listRemovedItems(db).then(setRemoved);
     }, [db]),
   );
 
   const segments: { key: Tab; label: string }[] = [
     { key: 'wishlist', label: 'Wishlist' },
-    { key: 'trips', label: 'Packing lists' },
+    { key: 'trips', label: 'Packing' },
+    { key: 'removed', label: 'Removed' },
   ];
 
   return (
@@ -54,7 +58,57 @@ export default function ListsScreen() {
         ))}
       </View>
 
-      {tab === 'wishlist' ? (
+      {tab === 'removed' ? (
+        <FlatList
+          data={removed}
+          keyExtractor={(item) => String(item.id)}
+          contentContainerStyle={styles.list}
+          ListHeaderComponent={
+            removed.length > 0 ? (
+              <ThemedText type="small" themeColor="textSecondary">
+                {removalSummary(removed)}
+              </ThemedText>
+            ) : null
+          }
+          ListEmptyComponent={
+            <ThemedText themeColor="textSecondary" style={styles.empty}>
+              Items you remove from your wardrobe show up here with the reason they went.
+            </ThemedText>
+          }
+          renderItem={({ item }) => (
+            <Link href={{ pathname: '/item/[id]', params: { id: item.id } }} asChild>
+              <Pressable
+                accessibilityLabel={item.name}
+                style={({ pressed }) => [styles.entry, pressed && styles.pressed]}>
+                <ItemPhoto photo={item.photo} name={item.name} style={styles.thumb} />
+                <View style={styles.flex}>
+                  <ThemedText numberOfLines={1}>{item.name}</ThemedText>
+                  <ThemedText type="smallBold">
+                    {[item.removedReason, item.removedOn && formatDay(item.removedOn)]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </ThemedText>
+                  {item.removedNote && (
+                    <ThemedText type="small" themeColor="textSecondary" numberOfLines={2}>
+                      {item.removedNote}
+                    </ThemedText>
+                  )}
+                  <ThemedText type="small" themeColor="textSecondary">
+                    {item.wearCount === 0 ? 'Never worn' : `Worn ${item.wearCount}×`}
+                    {item.price !== null
+                      ? ` · ${
+                          item.wearCount > 0
+                            ? `${formatPrice(item.price / item.wearCount)} per wear`
+                            : formatPrice(item.price)
+                        }`
+                      : ''}
+                  </ThemedText>
+                </View>
+              </Pressable>
+            </Link>
+          )}
+        />
+      ) : tab === 'wishlist' ? (
         <FlatList
           data={wishes}
           keyExtractor={(wish) => String(wish.id)}
@@ -153,6 +207,20 @@ export default function ListsScreen() {
       )}
     </ThemedView>
   );
+}
+
+// e.g. "5 items removed: 3 donated, 2 sold".
+function removalSummary(items: ItemWithStats[]) {
+  const counts = new Map<string, number>();
+  for (const item of items) {
+    const reason = item.removedReason ?? 'Other';
+    counts.set(reason, (counts.get(reason) ?? 0) + 1);
+  }
+  const reasons = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([reason, count]) => `${count} ${reason.toLowerCase()}`)
+    .join(', ');
+  return `${items.length} item${items.length === 1 ? '' : 's'} removed: ${reasons}`;
 }
 
 const styles = StyleSheet.create({

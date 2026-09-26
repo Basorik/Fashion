@@ -82,11 +82,14 @@ export async function addTripItems(db: SQLiteDatabase, tripId: number, itemIds: 
   });
 }
 
-// Adds every item from an outfit; items already on the list are left as they are.
+// Adds every item from an outfit that's still in the wardrobe; items already on
+// the list are left as they are.
 export async function addTripOutfit(db: SQLiteDatabase, tripId: number, outfitId: number) {
   await db.runAsync(
     `INSERT OR IGNORE INTO trip_items (trip_id, item_id)
-     SELECT ?, item_id FROM outfit_items WHERE outfit_id = ?`,
+     SELECT ?, item_id FROM outfit_items
+     JOIN items ON items.id = outfit_items.item_id
+     WHERE outfit_id = ? AND items.removed_on IS NULL`,
     tripId,
     outfitId,
   );

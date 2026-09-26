@@ -188,22 +188,38 @@ export default function ItemFormScreen() {
     return result.uri;
   }
 
-  // Sets a new photo, cuts the item out of it where the phone can, and, when
-  // the item has no color yet, tags its main colors. Colors are read from the
-  // cut-out when there is one, so the background doesn't count.
+  // Sets a new photo, cuts the item out of it where the phone can, and tags its
+  // main colors and their color seasons, for whichever of the two the item
+  // doesn't have yet. Colors are read from the cut-out when there is one, so
+  // the background doesn't count.
   async function applyPhoto(uri: string) {
     setPhoto({ uri });
     setPhotoMessage(null);
-    const hasColor = tags.some((tag) => tag.group === 'Color');
-    const cutoutUri = canRemoveBackground ? await cutOut({ uri }) : null;
-    if (hasColor) return;
-    const colors = await photoColorTags(cutoutUri ?? uri, { cutout: cutoutUri !== null });
-    if (colors.length === 0) return;
-    setTags((current) =>
-      current.some((tag) => tag.group === 'Color') ? current : mergeTags(current, colors),
+    const wanted = new Set<Tag['group']>(
+      (['Color', 'Color season'] as const).filter(
+        (group) => !tags.some((tag) => tag.group === group),
+      ),
     );
+    const cutoutUri = canRemoveBackground ? await cutOut({ uri }) : null;
+    if (wanted.size === 0) return;
+    const found = (await photoColorTags(cutoutUri ?? uri, { cutout: cutoutUri !== null })).filter(
+      (tag) => wanted.has(tag.group),
+    );
+    if (found.length === 0) return;
+    setTags((current) =>
+      mergeTags(
+        current,
+        found.filter((tag) => !current.some((other) => other.group === tag.group)),
+      ),
+    );
+    const colors = found.filter((tag) => tag.group === 'Color').map((tag) => tag.value);
+    const seasons = found.filter((tag) => tag.group === 'Color season').map((tag) => tag.value);
+    const described = [
+      colors.length > 0 ? listWords(colors.map((color) => color.toLowerCase())) : null,
+      seasons.length > 0 ? `color season ${listWords(seasons)}` : null,
+    ].filter(Boolean);
     setLookupMessage(
-      `Tagged ${listWords(colors.map((tag) => tag.value.toLowerCase()))} from the photo. Change it below if it's wrong.`,
+      `Tagged ${described.join(', ')} from the photo. Change it below if it's wrong.`,
     );
   }
 

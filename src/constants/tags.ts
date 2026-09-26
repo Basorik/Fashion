@@ -15,6 +15,9 @@ export const TagGroups = {
     'Purple',
     'Orange',
   ],
+  // Color analysis seasons: which people's coloring the item's shades suit
+  // (see constants/color-seasons). Separate from Season, which is the weather.
+  'Color season': ['Spring', 'Summer', 'Autumn', 'Winter'],
   Style: ['Casual', 'Formal', 'Business', 'Sporty', 'Streetwear', 'Loungewear', 'Party'],
   Season: ['Spring', 'Summer', 'Autumn', 'Winter'],
   Material: ['Cotton', 'Denim', 'Wool', 'Linen', 'Leather', 'Silk', 'Synthetic'],

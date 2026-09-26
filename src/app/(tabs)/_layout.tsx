@@ -55,6 +55,7 @@ export default function TabsLayout() {
         name="stats"
         options={{
           title: 'Stats',
+          headerRight: () => <HeaderTextButton href="/backup" label="Backup" />,
           tabBarIcon: tabIcon({ ios: 'chart.bar', android: 'bar_chart', web: 'bar_chart' }),
         }}
       />
