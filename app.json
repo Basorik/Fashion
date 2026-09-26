@@ -69,7 +69,8 @@
           "color": "#9E4636"
         }
       ],
-      "./modules/bella-vision/app.plugin.js"
+      "./modules/bella-vision/app.plugin.js",
+      "./modules/bella-share/app.plugin.js"
     ],
     "experiments": {
       "typedRoutes": true,

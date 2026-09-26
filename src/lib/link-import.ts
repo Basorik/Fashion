@@ -45,7 +45,7 @@ function absoluteUrl(value: string, pageUrl: string) {
   return `${pageUrl.replace(/[?#].*$/, '').replace(/[^/]*$/, '')}${value}`;
 }
 
-function decodeEntities(text: string) {
+export function decodeEntities(text: string) {
   return text
     .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
     .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCharCode(parseInt(code, 16)))
@@ -94,7 +94,7 @@ const SIZE_PARAMS =
 
 // Shopify serves any size of an image from the same file name with a suffix
 // like _200x or _400x600@2x. Dropping the suffix gives the full-size original.
-function shopifyOriginal(url: string) {
+export function shopifyOriginal(url: string) {
   if (!/cdn\.shopify\.com|\/cdn\/shop\//i.test(url)) return url;
   return url.replace(
     /_(\d+x\d*|x\d+|pico|icon|thumb|small|compact|medium|large|grande|master)(@\dx)?(?=\.\w+(\?|$))/i,
@@ -432,13 +432,16 @@ function merge(primary: LinkProduct | null, fallback: LinkProduct): LinkProduct 
 // shop link, using Shopify's product JSON, then the page's JSON-LD, then Open
 // Graph / Twitter / microdata tags and labelled details in the page text. `text` can be anything containing a link, like shared text.
 export async function importFromLink(text: string): Promise<LinkImportResult> {
-  const url = extractLink(text);
+  let url = extractLink(text);
   if (!url) return { ok: false, reason: 'no-link' };
 
   let html = '';
   let blocked = false;
   try {
     const response = await fetchWithTimeout(url, BROWSER_HEADERS);
+    // Links in emails and share sheets often go through a tracking redirect,
+    // so read the rest from the product page's own address.
+    if (/^https?:\/\//i.test(response.url)) url = response.url;
     if (response.ok) {
       html = await response.text();
     } else {

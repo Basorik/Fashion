@@ -70,7 +70,13 @@ const cutoutProblems = {
 
 // Adds or edits a wardrobe item (`id`), or a wishlist entry (`list=wish`, `wishId`).
 export default function ItemFormScreen() {
-  const params = useLocalSearchParams<{ id?: string; wishId?: string; list?: 'wish' }>();
+  // `url`: a product link shared from another app, ready to import.
+  const params = useLocalSearchParams<{
+    id?: string;
+    wishId?: string;
+    list?: 'wish';
+    url?: string;
+  }>();
   const isWish = params.list === 'wish' || params.wishId !== undefined;
   const rawId = isWish ? params.wishId : params.id;
   const editingId = rawId ? Number(rawId) : null;
@@ -90,7 +96,7 @@ export default function ItemFormScreen() {
   const [notes, setNotes] = useState('');
   const [store, setStore] = useState('');
   const [purchasedOn, setPurchasedOn] = useState('');
-  const [url, setUrl] = useState('');
+  const [url, setUrl] = useState(params.url ?? '');
   const [importing, setImporting] = useState(false);
   // Product photos from the last link or barcode lookup, to pick the item's photo from.
   const [photoChoices, setPhotoChoices] = useState<string[]>([]);
@@ -437,6 +443,13 @@ export default function ItemFormScreen() {
             <Button
               label={barcode ? 'Scan another barcode' : 'Scan a barcode'}
               onPress={() => setScanning(true)}
+              variant="plain"
+            />
+          )}
+          {!isWish && editingId === null && (
+            <Button
+              label="Import several items from an order email"
+              onPress={() => router.push('/import-order')}
               variant="plain"
             />
           )}
