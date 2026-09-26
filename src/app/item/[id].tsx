@@ -8,18 +8,22 @@ import { Button } from '@/components/button';
 import { Chip } from '@/components/chip';
 import { ItemPhoto } from '@/components/item-photo';
 import { Stat } from '@/components/stat';
+import { TextField } from '@/components/text-field';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { ItemStatuses, statusLabel, type ItemStatus } from '@/constants/item-status';
 import type { Tag } from '@/constants/tags';
 import { Radius, Spacing } from '@/constants/theme';
 import { useBusy } from '@/hooks/use-busy';
-import { formatRelativeDay } from '@/lib/dates';
+import { daysBetween, formatDay, formatRelativeDay } from '@/lib/dates';
 import {
   deleteItem,
   getItem,
   listItemTags,
   listWornWith,
   logWear,
+  setItemArchived,
+  setItemStatus,
   today,
   undoWear,
   type ItemWithStats,
@@ -35,9 +39,13 @@ export default function ItemScreen() {
   const [tags, setTags] = useState<Tag[]>([]);
   const [wornWith, setWornWith] = useState<Awaited<ReturnType<typeof listWornWith>>>([]);
   const [busy, run] = useBusy();
+  const [lentTo, setLentTo] = useState('');
 
   const load = useCallback(() => {
-    getItem(db, itemId).then(setItem);
+    getItem(db, itemId).then((loaded) => {
+      setItem(loaded);
+      setLentTo(loaded?.lentTo ?? '');
+    });
     listWornWith(db, itemId).then(setWornWith);
     listItemTags(db, itemId).then(setTags);
   }, [db, itemId]);
@@ -61,6 +69,33 @@ export default function ItemScreen() {
       load();
     });
   }
+
+  function changeStatus(status: ItemStatus | null) {
+    run(async () => {
+      await setItemStatus(db, current.id, status, lentTo.trim() || null);
+      load();
+    });
+  }
+
+  function saveLentTo() {
+    if (current.status !== 'lent' || (current.lentTo ?? '') === lentTo.trim()) return;
+    changeStatus('lent');
+  }
+
+  function toggleArchived() {
+    run(async () => {
+      await setItemArchived(db, current.id, current.archivedAt === null);
+      load();
+    });
+  }
+
+  const bought = [
+    current.store && `Bought at ${current.store}`,
+    current.purchasedOn &&
+      `${current.store ? 'on' : 'Bought on'} ${formatDay(current.purchasedOn)} (${formatAge(daysBetween(current.purchasedOn, now))})`,
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   function confirmDelete() {
     Alert.alert('Delete item?', `${current.name} and its wear history will be removed.`, [
@@ -99,6 +134,11 @@ export default function ItemScreen() {
             {[current.category, current.brand].filter(Boolean).join(' · ')}
           </ThemedText>
           <ThemedText type="title">{current.name}</ThemedText>
+          {current.archivedAt && (
+            <ThemedText type="small" themeColor="textSecondary">
+              {`Archived on ${formatDay(current.archivedAt)}. It's hidden from your wardrobe and suggestions.`}
+            </ThemedText>
+          )}
         </View>
 
         {tags.length > 0 && (
@@ -136,6 +176,47 @@ export default function ItemScreen() {
           />
         </View>
 
+        <View style={styles.section}>
+          <ThemedText type="caption" themeColor="textSecondary">
+            Where is it
+          </ThemedText>
+          <View style={styles.tags}>
+            <Chip
+              label="In wardrobe"
+              selected={current.status === null}
+              onPress={() => changeStatus(null)}
+            />
+            {ItemStatuses.map((status) => (
+              <Chip
+                key={status}
+                label={statusLabel(status)}
+                selected={current.status === status}
+                onPress={() => changeStatus(status)}
+              />
+            ))}
+          </View>
+          {current.status === 'lent' && (
+            <TextField
+              value={lentTo}
+              onChangeText={setLentTo}
+              onEndEditing={saveLentTo}
+              placeholder="Lent to whom? (optional)"
+              autoCapitalize="words"
+              returnKeyType="done"
+            />
+          )}
+        </View>
+
+        {(current.notes || bought) && (
+          <View style={styles.section}>
+            <ThemedText type="caption" themeColor="textSecondary">
+              Details
+            </ThemedText>
+            {bought ? <ThemedText>{bought}</ThemedText> : null}
+            {current.notes ? <ThemedText>{current.notes}</ThemedText> : null}
+          </View>
+        )}
+
         {wornWith.length > 0 && (
           <View style={styles.section}>
             <ThemedText type="caption" themeColor="textSecondary">
@@ -162,10 +243,26 @@ export default function ItemScreen() {
           </View>
         )}
 
-        <Button label="Delete item" onPress={confirmDelete} variant="danger" />
+        <View style={styles.row}>
+          <Button
+            label={current.archivedAt ? 'Unarchive' : 'Archive'}
+            onPress={toggleArchived}
+            variant="plain"
+          />
+          <Button label="Delete item" onPress={confirmDelete} variant="danger" />
+        </View>
       </ScrollView>
     </ThemedView>
   );
+}
+
+// "3 weeks old", "5 months old", "2 years old"
+function formatAge(days: number) {
+  if (days < 1) return 'new today';
+  if (days < 14) return `${days} day${days === 1 ? '' : 's'} old`;
+  if (days < 61) return `${Math.round(days / 7)} weeks old`;
+  if (days < 730) return `${Math.round(days / 30.4)} months old`;
+  return `${Math.floor(days / 365.25)} years old`;
 }
 
 const styles = StyleSheet.create({

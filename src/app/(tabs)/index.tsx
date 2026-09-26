@@ -1,16 +1,37 @@
 import { Link, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import {
+  FlatList,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 
+import { Button } from '@/components/button';
 import { CategoryChips } from '@/components/category-chips';
+import { Chip } from '@/components/chip';
 import { ItemPhoto } from '@/components/item-photo';
+import { StatusBadge } from '@/components/status-badge';
 import { TextField } from '@/components/text-field';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import type { Category } from '@/constants/categories';
+import { statusLabel } from '@/constants/item-status';
 import { Radius, Spacing } from '@/constants/theme';
-import { listItems, type ItemWithStats } from '@/lib/db';
+import { useBusy } from '@/hooks/use-busy';
+import { useTheme } from '@/hooks/use-theme';
+import { clearWashStatus, listItems, type ItemWithStats } from '@/lib/db';
+import {
+  matchesShow,
+  sortItems,
+  WardrobeShows,
+  WardrobeSorts,
+  type WardrobeShow,
+  type WardrobeSort,
+} from '@/lib/wardrobe-view';
 
 const COLUMNS = 3;
 
@@ -30,17 +51,43 @@ export default function WardrobeScreen() {
   const [category, setCategory] = useState<Category | undefined>();
   const [query, setQuery] = useState('');
   const [items, setItems] = useState<ItemWithStats[] | null>(null);
+  const [sort, setSort] = useState<WardrobeSort>('newest');
+  const [show, setShow] = useState<WardrobeShow>('all');
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [clearing, run] = useBusy();
+  const theme = useTheme();
+
+  const load = useCallback(() => {
+    listItems(db, category).then(setItems);
+  }, [db, category]);
 
   // Reload whenever the screen regains focus, e.g. after adding or deleting an item.
-  useFocusEffect(
-    useCallback(() => {
-      listItems(db, category).then(setItems);
-    }, [db, category]),
-  );
+  useFocusEffect(load);
 
   const tileSize = (width - Spacing.three * 2 - Spacing.two * (COLUMNS - 1)) / COLUMNS;
-  const visible = query.trim() ? (items ?? []).filter((item) => matchesSearch(item, query)) : items;
   const searching = query.trim() !== '';
+  const visible =
+    items &&
+    sortItems(
+      items.filter(
+        (item) => matchesShow(item, show) && (!searching || matchesSearch(item, query)),
+      ),
+      sort,
+    );
+  const filtered = searching || show !== 'all';
+  const optionsSummary = [
+    WardrobeSorts[sort],
+    show === 'all' ? null : WardrobeShows[show].toLowerCase(),
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  function markAllClean() {
+    run(async () => {
+      await clearWashStatus(db);
+      load();
+    });
+  }
 
   return (
     <ThemedView style={styles.container}>
@@ -58,6 +105,33 @@ export default function WardrobeScreen() {
       <View>
         <CategoryChips selected={category} onSelect={setCategory} />
       </View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: optionsOpen }}
+        accessibilityLabel={`Sort and filter: ${optionsSummary}`}
+        onPress={() => setOptionsOpen((open) => !open)}
+        style={styles.optionsToggle}>
+        <ThemedText type="small" style={{ color: theme.accent }}>
+          {optionsOpen ? 'Hide sort and filter' : `Sort: ${optionsSummary}`}
+        </ThemedText>
+      </Pressable>
+      {optionsOpen && (
+        <View style={styles.options}>
+          <ThemedText type="caption" themeColor="textSecondary" style={styles.optionsLabel}>
+            Sort by
+          </ThemedText>
+          <ChipRow options={WardrobeSorts} selected={sort} onSelect={setSort} />
+          <ThemedText type="caption" themeColor="textSecondary" style={styles.optionsLabel}>
+            Show
+          </ThemedText>
+          <ChipRow options={WardrobeShows} selected={show} onSelect={setShow} />
+        </View>
+      )}
+      {show === 'wash' && (visible?.length ?? 0) > 0 && (
+        <View style={styles.search}>
+          <Button label="Mark everything clean" onPress={markAllClean} busy={clearing} />
+        </View>
+      )}
       <FlatList
         data={visible ?? []}
         keyExtractor={(item) => String(item.id)}
@@ -69,15 +143,15 @@ export default function WardrobeScreen() {
           visible === null ? null : (
             <View style={styles.empty}>
               <ThemedText type="subtitle" style={styles.center}>
-                {searching
+                {filtered
                   ? 'Nothing matches'
                   : category
                     ? `No ${category.toLowerCase()} yet`
                     : 'Your wardrobe is empty'}
               </ThemedText>
               <ThemedText themeColor="textSecondary" style={styles.center}>
-                {searching
-                  ? 'Try another word, or clear the search.'
+                {filtered
+                  ? 'Try another word, or change the filter.'
                   : 'Tap + to add an item from a photo, a barcode, a link, or by hand.'}
               </ThemedText>
             </View>
@@ -86,13 +160,20 @@ export default function WardrobeScreen() {
         renderItem={({ item }) => (
           <Link href={{ pathname: '/item/[id]', params: { id: item.id } }} asChild>
             <Pressable
-              accessibilityLabel={`${item.name}, worn ${item.wearCount} times`}
+              accessibilityLabel={[
+                item.name,
+                `worn ${item.wearCount} times`,
+                item.status && statusLabel(item.status, item.lentTo),
+              ]
+                .filter(Boolean)
+                .join(', ')}
               style={({ pressed }) => [{ width: tileSize }, pressed && styles.pressed]}>
               <ItemPhoto
                 photo={item.photo}
                 name={item.name}
                 style={[styles.tile, { width: tileSize, height: tileSize * 1.25 }]}
               />
+              {item.status && <StatusBadge status={item.status} lentTo={item.lentTo} />}
               <ThemedText type="small" numberOfLines={1}>
                 {item.name}
               </ThemedText>
@@ -107,7 +188,49 @@ export default function WardrobeScreen() {
   );
 }
 
+function ChipRow<T extends string>({
+  options,
+  selected,
+  onSelect,
+}: {
+  options: Record<T, string>;
+  selected: T;
+  onSelect: (value: T) => void;
+}) {
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.chipRow}>
+      {(Object.keys(options) as T[]).map((key) => (
+        <Chip
+          key={key}
+          label={options[key]}
+          selected={key === selected}
+          onPress={() => onSelect(key)}
+        />
+      ))}
+    </ScrollView>
+  );
+}
+
 const styles = StyleSheet.create({
+  optionsToggle: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: Spacing.three,
+    paddingBottom: Spacing.one,
+  },
+  options: {
+    paddingTop: Spacing.one,
+  },
+  optionsLabel: {
+    paddingHorizontal: Spacing.three,
+  },
+  chipRow: {
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+  },
   container: {
     flex: 1,
   },

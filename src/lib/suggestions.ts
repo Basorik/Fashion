@@ -23,16 +23,25 @@ export async function suggestOutfits(
 ): Promise<Suggestion[]> {
   const [outfits, rows] = await Promise.all([
     listOutfits(db),
-    db.getAllAsync<{ outfitId: number; category: string; seasons: string | null }>(
+    db.getAllAsync<{
+      outfitId: number;
+      category: string;
+      seasons: string | null;
+      available: number;
+    }>(
       `SELECT outfit_items.outfit_id AS outfitId, items.category,
+         items.status IS NULL AND items.archived_at IS NULL AS available,
          (SELECT group_concat(value) FROM item_tags
           WHERE item_id = items.id AND tag_group = 'Season') AS seasons
        FROM outfit_items JOIN items ON items.id = outfit_items.item_id`,
     ),
   ]);
 
+  // Outfits with an item in the wash, lent out or archived can't be worn today.
+  const unavailable = new Set(rows.filter((row) => !row.available).map((row) => row.outfitId));
   const byOutfit = new Map<number, { categories: Set<string>; seasons: Set<string> }>();
   for (const row of rows) {
+    if (unavailable.has(row.outfitId)) continue;
     const entry = byOutfit.get(row.outfitId) ?? { categories: new Set(), seasons: new Set() };
     entry.categories.add(row.category);
     for (const season of row.seasons?.split(',') ?? []) entry.seasons.add(season);

@@ -10,6 +10,18 @@ export function fromDateString(value: string) {
   return new Date(year, month - 1, day);
 }
 
+// Reads a typed YYYY-MM-DD date (single-digit month and day allowed). Returns
+// null for anything else, impossible dates like 2025-02-30, and future dates.
+export function parseDateString(value: string) {
+  const match = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(value.trim());
+  if (!match) return null;
+  const [year, month, day] = match.slice(1).map(Number);
+  const date = new Date(year, month - 1, day);
+  if (date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+  const result = toDateString(date);
+  return result > toDateString(new Date()) ? null : result;
+}
+
 export function addDays(value: string, days: number) {
   const date = fromDateString(value);
   date.setDate(date.getDate() + days);

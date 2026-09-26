@@ -2,7 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import type { Category } from '@/constants/categories';
 import type { Tag } from '@/constants/tags';
-import { insertItem, type Item, type ItemInput } from '@/lib/db';
+import { insertItem, today, type Item, type ItemInput } from '@/lib/db';
 
 export type Wish = {
   id: number;
@@ -92,6 +92,10 @@ export async function markWishBought(db: SQLiteDatabase, wish: Wish, tags: Tag[]
     price: wish.price,
     photo: wish.photo,
     barcode: null,
+    notes: null,
+    store: null,
+    // Moving a wish to the wardrobe means it was just bought.
+    purchasedOn: today(),
     tags,
   };
   let itemId = 0;

@@ -5,6 +5,7 @@ import { Alert, Pressable, SectionList, StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { ItemPhoto } from '@/components/item-photo';
+import { statusLabel } from '@/constants/item-status';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Radius, Spacing } from '@/constants/theme';
@@ -161,11 +162,18 @@ export default function TripScreen() {
               )}
             </View>
             <ItemPhoto photo={item.photo} name={item.name} style={styles.thumb} />
-            <ThemedText
-              style={[styles.flex, item.packed && styles.packed]}
-              themeColor={item.packed ? 'textSecondary' : 'text'}>
-              {item.name}
-            </ThemedText>
+            <View style={styles.flex}>
+              <ThemedText
+                style={item.packed && styles.packed}
+                themeColor={item.packed ? 'textSecondary' : 'text'}>
+                {item.name}
+              </ThemedText>
+              {item.status && !item.packed && (
+                <ThemedText type="small" themeColor="danger">
+                  {statusLabel(item.status, item.lentTo)}
+                </ThemedText>
+              )}
+            </View>
           </Pressable>
         )}
         ListFooterComponent={

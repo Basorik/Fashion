@@ -4,6 +4,7 @@ import { FlatList, Pressable, StyleSheet, useWindowDimensions, View } from 'reac
 
 import { CategoryChips } from '@/components/category-chips';
 import { ItemPhoto } from '@/components/item-photo';
+import { StatusBadge } from '@/components/status-badge';
 import { ThemedText } from '@/components/themed-text';
 import type { Category } from '@/constants/categories';
 import { Radius, Spacing } from '@/constants/theme';
@@ -28,7 +29,8 @@ export function ItemSelectGrid({ selected, onChange, header }: Props) {
   const [category, setCategory] = useState<Category | undefined>();
 
   useEffect(() => {
-    listItems(db, category).then(setItems);
+    // Archived items are put away, so they aren't offered here.
+    listItems(db, category).then((all) => setItems(all.filter((item) => !item.archivedAt)));
   }, [db, category]);
 
   function toggle(id: number) {
@@ -88,6 +90,7 @@ export function ItemSelectGrid({ selected, onChange, header }: Props) {
                 </ThemedText>
               </View>
             )}
+            {item.status && <StatusBadge status={item.status} lentTo={item.lentTo} />}
             <ThemedText type="small" numberOfLines={1}>
               {item.name}
             </ThemedText>
