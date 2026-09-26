@@ -186,15 +186,13 @@ export default function ItemFormScreen() {
     if (setsCategory) setCategory(found.category!);
     if (newTags.length > 0) setTags((current) => mergeTags(current, newTags));
     const notes = [
-      setsCategory ? `set the category to ${found.category!.toLowerCase()}` : null,
+      setsCategory ? `category ${found.category!.toLowerCase()}` : null,
       newTags.length > 0
         ? `tagged ${listWords(newTags.map((tag) => tag.value.toLowerCase()))}`
         : null,
     ].filter(Boolean);
     if (notes.length > 0) {
-      setLookupMessage(
-        `From the photo, ${notes.join(' and ')}. Change anything that's wrong below.`,
-      );
+      setLookupMessage(`From the photo: ${notes.join(', ')}. Change anything that's wrong below.`);
     }
   }
 
