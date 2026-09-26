@@ -1,10 +1,9 @@
 import { File, Paths } from 'expo-file-system';
 
-import BellaVision from '../../modules/bella-vision';
+import BellaVision, { type ImageLabel } from '../../modules/bella-vision';
 import type { Category } from '@/constants/categories';
 import type { Tag } from '@/constants/tags';
-import { photoColorTags } from '@/lib/photo-colors';
-import { inferCategory, inferTags, mergeTags } from '@/lib/tag-inference';
+import { mergeTags } from '@/lib/tag-inference';
 
 // Photo tools that run on the phone: Apple Vision on iOS, Google ML Kit on
 // Android. They need the app's own development build; in Expo Go the native
@@ -13,20 +12,105 @@ import { inferCategory, inferTags, mergeTags } from '@/lib/tag-inference';
 export const canRemoveBackground = BellaVision?.canRemoveBackground ?? false;
 export const canLabelPhotos = BellaVision !== null;
 
-// Labels below this are too often wrong to act on.
-const MIN_CONFIDENCE = 0.3;
+// Photo labels the app acts on, and what each means. General-purpose label
+// sets say plenty that's true of the photo but not of the item ("sleeve",
+// "jersey", "flower" on a patterned wall), so anything not listed is ignored.
+const LABEL_MEANINGS: Record<string, { category?: Category; tag?: Tag }> = {};
 
-// Spellings in the Vision and ML Kit label sets that the tag dictionaries write differently.
-const LABEL_ALIASES: Record<string, string> = {
-  tshirt: 't-shirt',
-  jean: 'jeans',
-  sneaker: 'sneakers',
-  sunglass: 'sunglasses',
-};
+function means(labels: string[], meaning: { category?: Category; tag?: Tag }) {
+  for (const label of labels) LABEL_MEANINGS[label] = meaning;
+}
 
-// Labels that say nothing about the item but would match a tag word
-// ("pattern" would tag every photo as a print).
-const GENERIC_LABELS = new Set(['pattern', 'textile', 'design', 'fashion design']);
+means(['jeans', 'jean', 'pants', 'trousers', 'shorts', 'skirt', 'miniskirt', 'leggings'], {
+  category: 'Bottoms',
+});
+means(
+  [
+    'shirt',
+    't-shirt',
+    'tshirt',
+    'blouse',
+    'sweater',
+    'sweatshirt',
+    'hoodie',
+    'cardigan',
+    'polo shirt',
+    'tank top',
+  ],
+  { category: 'Tops' },
+);
+means(['dress', 'gown', 'sundress', 'wedding dress'], { category: 'Dresses' });
+means(
+  [
+    'jacket',
+    'coat',
+    'blazer',
+    'parka',
+    'raincoat',
+    'overcoat',
+    'trench coat',
+    'outerwear',
+    'vest',
+    'suit',
+  ],
+  {
+    category: 'Outerwear',
+  },
+);
+means(
+  [
+    'shoe',
+    'shoes',
+    'sneaker',
+    'sneakers',
+    'boot',
+    'boots',
+    'sandal',
+    'sandals',
+    'footwear',
+    'high heels',
+    'loafer',
+    'slipper',
+  ],
+  { category: 'Shoes' },
+);
+means(
+  [
+    'bag',
+    'handbag',
+    'backpack',
+    'purse',
+    'hat',
+    'cap',
+    'sunglasses',
+    'sunglass',
+    'scarf',
+    'belt',
+    'watch',
+    'necklace',
+    'bracelet',
+    'earrings',
+    'tie',
+    'bowtie',
+    'glove',
+    'gloves',
+    'jewelry',
+  ],
+  { category: 'Accessories' },
+);
+means(['denim'], { tag: { group: 'Material', value: 'Denim' } });
+means(['leather'], { tag: { group: 'Material', value: 'Leather' } });
+means(['wool', 'knitwear', 'knitting'], { tag: { group: 'Material', value: 'Wool' } });
+means(['silk', 'satin'], { tag: { group: 'Material', value: 'Silk' } });
+means(['plaid', 'tartan', 'checkered', 'gingham'], { tag: { group: 'Pattern', value: 'Checked' } });
+means(['stripes', 'striped', 'pinstripe'], { tag: { group: 'Pattern', value: 'Striped' } });
+means(['floral', 'paisley'], { tag: { group: 'Pattern', value: 'Floral' } });
+means(['polka dot', 'camouflage', 'leopard'], { tag: { group: 'Pattern', value: 'Print' } });
+
+// How sure the label must be before the app acts on it. Picking the category
+// is easy to fix and shown in the form; a tag is easier to miss.
+const CATEGORY_CONFIDENCE = 0.5;
+const TAG_CONFIDENCE = 0.7;
 
 // The native tools read local files, so product images from a link are downloaded first.
 async function localFile(uri: string) {
@@ -54,51 +138,45 @@ export async function removeBackground(uri: string): Promise<CutoutResult> {
   }
 }
 
-export async function photoLabels(uri: string): Promise<string[]> {
+export async function photoLabels(uri: string): Promise<ImageLabel[]> {
   if (!BellaVision) return [];
   try {
     const labels = await BellaVision.labelImageAsync(await localFile(uri));
-    return labels
-      .filter((label) => label.confidence >= MIN_CONFIDENCE)
-      .map(({ label }) => {
-        const lower = label.toLowerCase();
-        return LABEL_ALIASES[lower] ?? lower;
-      });
+    return labels.map(({ label, confidence }) => ({ label: label.toLowerCase(), confidence }));
   } catch {
     return [];
   }
 }
 
 // Category and tags suggested from labels, which come most likely first. The
-// category is the first label that names one, so a confident "jeans" beats a
-// doubtful "shoe" in the corner. Colors aren't taken from labels; the pixel
-// colors are more reliable.
-export function suggestionsFromLabels(labels: string[]): {
+// category is the first known label that names one, so a confident "jeans"
+// beats a doubtful "shoe" in the corner. Colors come from the pixels instead.
+export function suggestionsFromLabels(labels: ImageLabel[]): {
   category: Category | null;
   tags: Tag[];
 } {
   let category: Category | null = null;
-  for (const label of labels) {
-    category = inferCategory({ category: label });
-    if (category) break;
+  const tags: Tag[] = [];
+  for (const { label, confidence } of labels) {
+    const meaning = LABEL_MEANINGS[label];
+    if (!meaning) continue;
+    if (meaning.category && !category && confidence >= CATEGORY_CONFIDENCE) {
+      category = meaning.category;
+    }
+    if (meaning.tag && confidence >= TAG_CONFIDENCE) tags.push(meaning.tag);
   }
-  const words = labels.filter((label) => !GENERIC_LABELS.has(label));
-  const tags = inferTags({ keywords: words, material: words.join(', ') }).filter(
-    (tag) => tag.group !== 'Color',
-  );
-  return { category, tags };
+  return { category, tags: mergeTags([], tags) };
 }
 
-export type PhotoSuggestions = { category: Category | null; tags: Tag[] };
+export type PhotoSuggestions = {
+  category: Category | null;
+  tags: Tag[];
+  // What the phone saw, for tuning in development builds.
+  labels: ImageLabel[];
+};
 
-// Everything the phone can tell about an item from its photo: its main colors
-// (skipped when `withColors` is false) plus, in the development build, a
-// category and tags from the photo's labels.
-export async function analyzePhoto(uri: string, withColors: boolean): Promise<PhotoSuggestions> {
-  const [colors, labels] = await Promise.all([
-    withColors ? photoColorTags(uri) : Promise.resolve([]),
-    photoLabels(uri),
-  ]);
-  const fromLabels = suggestionsFromLabels(labels);
-  return { category: fromLabels.category, tags: mergeTags(colors, fromLabels.tags) };
+// A category and tags from the photo's labels (development build only).
+export async function analyzePhoto(uri: string): Promise<PhotoSuggestions> {
+  const labels = await photoLabels(uri);
+  return { ...suggestionsFromLabels(labels), labels };
 }

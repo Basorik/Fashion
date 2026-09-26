@@ -2,6 +2,7 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { decode } from 'jpeg-js';
 
 import type { Tag } from '@/constants/tags';
+import { decodePng } from '@/lib/png';
 
 const SAMPLE_SIZE = 48;
 
@@ -70,18 +71,39 @@ export function dominantColors(rgba: ArrayLike<number>, width: number, height: n
   const backgroundIsUniform =
     border.filter((color) => distance(color, background) < 40).length > border.length * 0.6;
 
-  const votes = new Map<string, number>();
-  let counted = 0;
+  const colors: Rgb[] = [];
   // Only the central area, where the item almost always is.
   for (let y = Math.floor(height * 0.15); y < height * 0.85; y++) {
     for (let x = Math.floor(width * 0.15); x < width * 0.85; x++) {
       const color = pixel(x, y);
       if (backgroundIsUniform && distance(color, background) < 45) continue;
-      const name = colorName(color);
-      votes.set(name, (votes.get(name) ?? 0) + 1);
-      counted++;
+      colors.push(color);
     }
   }
+  return topColors(colors);
+}
+
+// The main colors of a cut-out: every solid pixel is the item, so all of them vote.
+export function dominantCutoutColors(
+  rgba: ArrayLike<number>,
+  width: number,
+  height: number,
+): string[] {
+  const colors: Rgb[] = [];
+  for (let index = 0; index < width * height * 4; index += 4) {
+    if (rgba[index + 3] >= 200) colors.push([rgba[index], rgba[index + 1], rgba[index + 2]]);
+  }
+  return topColors(colors);
+}
+
+// Up to two preset colors the pixels vote for, most common first.
+function topColors(colors: Rgb[]) {
+  const votes = new Map<string, number>();
+  for (const color of colors) {
+    const name = colorName(color);
+    votes.set(name, (votes.get(name) ?? 0) + 1);
+  }
+  const counted = colors.length;
   if (counted === 0) return [];
 
   const ranked = [...votes.entries()].sort((a, b) => b[1] - a[1]);
@@ -109,12 +131,22 @@ function base64ToBytes(base64: string) {
   return bytes.subarray(0, byteIndex);
 }
 
-// Color tags for a photo, computed on the phone: the photo is shrunk to a
-// small JPEG, decoded in JavaScript, and its main colors matched to the presets.
-export async function photoColorTags(uri: string): Promise<Tag[]> {
+// Color tags for a photo, computed on the phone: the photo is shrunk, decoded
+// in JavaScript, and its main colors matched to the presets. A cut-out (a
+// transparent PNG of just the item) is read as a PNG so only the item counts.
+export async function photoColorTags(uri: string, { cutout = false } = {}): Promise<Tag[]> {
   try {
     const context = ImageManipulator.manipulate(uri).resize({ width: SAMPLE_SIZE });
     const image = await context.renderAsync();
+    if (cutout) {
+      const result = await image.saveAsync({ format: SaveFormat.PNG, base64: true });
+      const decoded = result.base64 ? decodePng(base64ToBytes(result.base64)) : null;
+      if (!decoded) return [];
+      return dominantCutoutColors(decoded.data, decoded.width, decoded.height).map((value) => ({
+        group: 'Color',
+        value,
+      }));
+    }
     const result = await image.saveAsync({ format: SaveFormat.JPEG, base64: true, compress: 0.9 });
     if (!result.base64) return [];
     const { width, height, data } = decode(base64ToBytes(result.base64), {

@@ -24,6 +24,7 @@ import { inferCategory, inferTags, mergeTags, type ProductText } from '@/lib/tag
 import { addItem, getItem, listItemTags, updateItem } from '@/lib/db';
 import { parsePrice } from '@/lib/money';
 import { analyzePhoto, canRemoveBackground, removeBackground } from '@/lib/photo-ai';
+import { photoColorTags } from '@/lib/photo-colors';
 import { deletePhoto, isCutout, photoUri, savePhoto } from '@/lib/photos';
 import { addWish, getWish, listWishTags, updateWish } from '@/lib/wishlist';
 
@@ -152,8 +153,8 @@ export default function ItemFormScreen() {
   }
 
   // Replaces the shown photo with a cut-out of the item, unless another photo
-  // was picked in the meantime.
-  async function cutOut(source: PhotoSource) {
+  // was picked in the meantime. Returns the cut-out's URI, or null.
+  async function cutOut(source: PhotoSource): Promise<string | null> {
     const sourceUri = displayUri(source);
     setCuttingOut(true);
     setPhotoMessage(null);
@@ -161,27 +162,31 @@ export default function ItemFormScreen() {
     setCuttingOut(false);
     if (!result.ok) {
       setPhotoMessage(cutoutProblems[result.reason]);
-      return;
+      return null;
     }
     setPhoto((current) =>
       current && displayUri(current) === sourceUri
         ? { cutout: result.uri, original: source }
         : current,
     );
+    return result.uri;
   }
 
   // Sets a new photo, cuts the item out of it where the phone can, and
   // suggests a category and tags from it. Colors are only suggested when the
-  // item has none yet.
+  // item has none yet, and are read from the cut-out when there is one.
   async function applyPhoto(uri: string) {
     setPhoto({ uri });
     setPhotoMessage(null);
-    if (canRemoveBackground) cutOut({ uri });
-    const found = await analyzePhoto(uri, !tags.some((tag) => tag.group === 'Color'));
-    const suggested = tags.some((tag) => tag.group === 'Color')
-      ? found.tags.filter((tag) => tag.group !== 'Color')
-      : found.tags;
-    const newTags = mergeTags(tags, suggested).slice(tags.length);
+    const hasColor = tags.some((tag) => tag.group === 'Color');
+    const [cutoutUri, found] = await Promise.all([
+      canRemoveBackground ? cutOut({ uri }) : Promise.resolve(null),
+      analyzePhoto(uri),
+    ]);
+    const colors = hasColor
+      ? []
+      : await photoColorTags(cutoutUri ?? uri, { cutout: cutoutUri !== null });
+    const newTags = mergeTags(tags, mergeTags(colors, found.tags)).slice(tags.length);
     const setsCategory = found.category !== null && !categoryTouched;
     if (setsCategory) setCategory(found.category!);
     if (newTags.length > 0) setTags((current) => mergeTags(current, newTags));
@@ -191,8 +196,18 @@ export default function ItemFormScreen() {
         ? `tagged ${listWords(newTags.map((tag) => tag.value.toLowerCase()))}`
         : null,
     ].filter(Boolean);
-    if (notes.length > 0) {
-      setLookupMessage(`From the photo: ${notes.join(', ')}. Change anything that's wrong below.`);
+    // In test builds, list what the phone saw so wrong guesses can be traced.
+    const seen =
+      __DEV__ && found.labels.length > 0
+        ? ` Saw: ${found.labels
+            .slice(0, 8)
+            .map(({ label, confidence }) => `${label} ${Math.round(confidence * 100)}%`)
+            .join(', ')}.`
+        : '';
+    if (notes.length > 0 || seen) {
+      setLookupMessage(
+        `${notes.length > 0 ? `From the photo: ${notes.join(', ')}. Change anything that's wrong below.` : ''}${seen}`.trim(),
+      );
     }
   }
 
