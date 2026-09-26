@@ -1,4 +1,6 @@
-export type LinkProduct = {
+import type { ProductText } from '@/lib/tag-inference';
+
+export type LinkProduct = ProductText & {
   name: string | null;
   brand: string | null;
   price: number | null;
@@ -134,6 +136,10 @@ function jsonLdProduct(html: string): LinkProduct | null {
       brand: asText(product.brand),
       price: offerPrice(product.offers) ?? offerPrice(variant?.offers),
       imageUrl: asImage(product.image) ?? asImage(variant?.image),
+      color: asText(product.color) ?? asText(variant?.color),
+      material: asText(product.material) ?? asText(variant?.material),
+      category: asText(product.category),
+      description: asText(product.description),
     };
   }
   return null;
@@ -152,10 +158,29 @@ async function fetchWithTimeout(url: string, headers: Record<string, string>) {
 type ShopifyProduct = {
   title?: string;
   vendor?: string;
+  type?: string;
+  tags?: string[] | string;
+  description?: string;
   price?: number; // in cents
   featured_image?: string;
   images?: string[];
+  options?: ({ name: string; values?: string[] } | string)[];
+  variants?: { id: number; options?: string[] }[];
 };
+
+// The color of the variant in the link (?variant=123), or the first color option.
+function shopifyColor(product: ShopifyProduct, url: string) {
+  const index = (product.options ?? []).findIndex((option) =>
+    /colou?r/i.test(typeof option === 'string' ? option : option.name),
+  );
+  if (index === -1) return null;
+  const variantId = Number(url.match(/[?&]variant=(\d+)/)?.[1]);
+  const variant = product.variants?.find((entry) => entry.id === variantId);
+  const option = product.options![index];
+  return (
+    variant?.options?.[index] ?? (typeof option === 'string' ? null : option.values?.[0]) ?? null
+  );
+}
 
 // Shopify stores (a large share of clothing brands) serve product JSON at <product url>.js,
 // which works even when the HTML page is rendered by JavaScript.
@@ -175,6 +200,10 @@ async function shopifyProduct(url: string): Promise<LinkProduct | null> {
       brand: product.vendor ?? null,
       price: typeof product.price === 'number' ? product.price / 100 : null,
       imageUrl: product.featured_image ?? product.images?.[0] ?? null,
+      color: shopifyColor(product, url),
+      category: product.type || null,
+      description: product.description ?? null,
+      keywords: typeof product.tags === 'string' ? product.tags.split(',') : (product.tags ?? []),
     };
   } catch {
     return null;
@@ -187,6 +216,11 @@ function merge(primary: LinkProduct | null, fallback: LinkProduct): LinkProduct 
     brand: primary?.brand ?? fallback.brand,
     price: primary?.price ?? fallback.price,
     imageUrl: primary?.imageUrl ?? fallback.imageUrl,
+    color: primary?.color ?? fallback.color,
+    material: primary?.material ?? fallback.material,
+    category: primary?.category ?? fallback.category,
+    description: primary?.description ?? fallback.description,
+    keywords: [...(primary?.keywords ?? []), ...(fallback.keywords ?? [])],
   };
 }
 
@@ -216,13 +250,17 @@ export async function importFromLink(text: string): Promise<LinkImportResult> {
     brand: metaContent(html, 'product:brand', 'og:brand', 'brand', 'og:site_name'),
     price: toPrice(metaContent(html, 'product:price:amount', 'og:price:amount', 'price')),
     imageUrl: metaContent(html, 'og:image:secure_url', 'og:image', 'twitter:image', 'image'),
+    color: metaContent(html, 'product:color', 'og:color', 'color'),
+    material: metaContent(html, 'product:material', 'material'),
+    category: metaContent(html, 'product:category', 'category'),
+    description: metaContent(html, 'og:description', 'description', 'twitter:description'),
+    keywords: metaContent(html, 'keywords')?.split(',') ?? [],
   };
   let product = merge(jsonLdProduct(html), fromTags);
 
-  if (!product.price || !product.imageUrl || !product.name) {
-    const shopify = await shopifyProduct(url);
-    if (shopify) product = merge(shopify, product);
-  }
+  // Shopify's product JSON also has the product type, tags and colour options.
+  const shopify = await shopifyProduct(url);
+  if (shopify) product = merge(shopify, product);
 
   // A bot-check or empty JavaScript shell page has a title but no product image.
   if (!product.imageUrl && !product.price) {

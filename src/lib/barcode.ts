@@ -1,7 +1,8 @@
-export type ProductInfo = {
+import type { ProductText } from '@/lib/tag-inference';
+
+export type ProductInfo = ProductText & {
   name: string | null;
   brand: string | null;
-  color: string | null;
   imageUrl: string | null;
 };
 
@@ -11,6 +12,8 @@ type UpcItemDbResponse = {
     title?: string;
     brand?: string;
     color?: string;
+    description?: string;
+    category?: string;
     images?: string[];
   }[];
 };
@@ -32,6 +35,8 @@ export async function lookupBarcode(code: string): Promise<ProductInfo | null> {
       name: product.title?.trim() || null,
       brand: product.brand?.trim() || null,
       color: product.color?.trim() || null,
+      description: product.description ?? null,
+      category: product.category ?? null,
       imageUrl: product.images?.find((url) => url.startsWith('https://')) ?? null,
     };
   } catch {

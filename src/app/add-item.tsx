@@ -17,6 +17,7 @@ import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { lookupBarcode } from '@/lib/barcode';
 import { extractLink, importFromLink } from '@/lib/link-import';
+import { inferCategory, inferTags, mergeTags, type ProductText } from '@/lib/tag-inference';
 import { addItem, getItem, listItemTags, updateItem } from '@/lib/db';
 import { deletePhoto, photoUri, savePhoto } from '@/lib/photos';
 import { addWish, getWish, listWishTags, updateWish } from '@/lib/wishlist';
@@ -46,6 +47,8 @@ export default function ItemFormScreen() {
   const [photo, setPhoto] = useState<PhotoState>(null);
   const [name, setName] = useState('');
   const [category, setCategory] = useState<Category>('Tops');
+  // Once the user picks a category themselves, lookups stop changing it.
+  const [categoryTouched, setCategoryTouched] = useState(editingId !== null);
   const [brand, setBrand] = useState('');
   const [price, setPrice] = useState('');
   const [barcode, setBarcode] = useState<string | null>(null);
@@ -78,6 +81,25 @@ export default function ItemFormScreen() {
     });
   }, [db, editingId, isWish]);
 
+  // Fills empty fields from a looked-up product and adds tags matched from its
+  // details. Returns a note like ", with 4 tags" for the status message.
+  function applyProductDetails(
+    product: ProductText & { brand: string | null; imageUrl: string | null },
+  ) {
+    if (product.name) setName((current) => current || product.name!);
+    if (product.brand) setBrand((current) => current || product.brand!);
+    if (product.imageUrl) {
+      const imageUrl = product.imageUrl;
+      setPhoto((current) => current ?? { uri: imageUrl });
+    }
+    const inferredCategory = inferCategory(product);
+    if (inferredCategory && !categoryTouched) setCategory(inferredCategory);
+    const suggested = inferTags(product);
+    const newTags = mergeTags(tags, suggested).length - tags.length;
+    setTags((current) => mergeTags(current, suggested));
+    return newTags > 0 ? `, with ${newTags} tag${newTags === 1 ? '' : 's'}` : '';
+  }
+
   async function importLink() {
     setImporting(true);
     setLookupMessage(null);
@@ -98,14 +120,9 @@ export default function ItemFormScreen() {
     const { product } = result;
     const link = extractLink(url);
     if (link) setUrl(link);
-    if (product.name) setName((current) => current || product.name!);
-    if (product.brand) setBrand((current) => current || product.brand!);
     if (product.price !== null) setPrice((current) => current || String(product.price));
-    if (product.imageUrl) {
-      const imageUrl = product.imageUrl;
-      setPhoto((current) => current ?? { uri: imageUrl });
-    }
-    setLookupMessage('Filled in from the link. Check the details before saving.');
+    const added = applyProductDetails(product);
+    setLookupMessage(`Filled in from the link${added}. Check the details before saving.`);
   }
 
   async function takePhoto() {
@@ -134,22 +151,8 @@ export default function ItemFormScreen() {
       setLookupMessage('No product details found for this barcode. Fill them in below.');
       return;
     }
-    // Only fill fields the user hasn't typed into yet.
-    if (product.name) setName((current) => current || product.name!);
-    if (product.brand) setBrand((current) => current || product.brand!);
-    if (product.color) {
-      const color = product.color;
-      setTags((current) =>
-        current.some((tag) => tag.group === 'Color')
-          ? current
-          : [...current, { group: 'Color', value: color }],
-      );
-    }
-    if (product.imageUrl) {
-      const imageUrl = product.imageUrl;
-      setPhoto((current) => current ?? { uri: imageUrl });
-    }
-    setLookupMessage('Filled in from the barcode. Check the details before saving.');
+    const added = applyProductDetails(product);
+    setLookupMessage(`Filled in from the barcode${added}. Check the details before saving.`);
   }
 
   const parsedPrice = price.trim() === '' ? null : Number(price.replace(',', '.'));
@@ -274,7 +277,11 @@ export default function ItemFormScreen() {
         <View style={styles.chips}>
           <CategoryChips
             selected={category}
-            onSelect={(value) => value && setCategory(value)}
+            onSelect={(value) => {
+              if (!value) return;
+              setCategory(value);
+              setCategoryTouched(true);
+            }}
             allowAll={false}
           />
         </View>
