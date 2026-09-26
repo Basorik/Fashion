@@ -86,7 +86,7 @@ function attribute(tag: string, name: string) {
 
 // Logos, icons, payment badges and the like share the product image CDN.
 const NOT_A_PRODUCT_PHOTO =
-  /\.(svg|gif)(\?|$)|logo|icon|sprite|badge|payment|placeholder|avatar|flag|swatch|loader|spinner|pixel|blank\./i;
+  /\.(svg|gif)(\?|$)|logo|icon|sprite|badge|payment|placeholder|avatar|flag|swatch|[/_-]chips?[/_.-]|loader|spinner|pixel|blank\./i;
 
 // Query parameters that only choose a size or format of the same image.
 const SIZE_PARAMS =
@@ -183,6 +183,38 @@ function galleryImages(html: string, known: string[], pageUrl: string) {
     if (url && folders.has(imageFolder(absoluteUrl(url, pageUrl)))) found.push(url);
   }
   return found;
+}
+
+// Product photos anywhere in the page (including the JSON a JavaScript page is
+// built from) whose path carries the product's number from the link, like
+// Uniqlo's .../imagesgoods/465185/sub/... photos for /products/E465185-000.
+// Only on the same host as a photo the page already named, and only numbers of
+// five or more digits that also appear in that photo's path.
+function productIdImages(html: string, known: string[], pageUrl: string) {
+  const knownUrls = known.map((url) => absoluteUrl(url, pageUrl));
+  const hosts = new Set(knownUrls.map((url) => originOf(url).toLowerCase()));
+  const pagePath = pageUrl.replace(/^https?:\/\/[^/]+/i, '').replace(/[?#].*$/, '');
+  const ids = [...new Set(pagePath.match(/\d{5,}/g) ?? [])].filter((id) =>
+    knownUrls.some((url) => new RegExp(`(^|\\D)${id}(\\D|$)`).test(url.replace(/[?#].*$/, ''))),
+  );
+  if (ids.length === 0) return [];
+  const text = html.replace(/\\u002F/gi, '/').replace(/\\\//g, '/');
+  const found: string[] = [];
+  for (const match of text.matchAll(
+    /(?:https?:)?\/\/[^\s"'<>()\\]+?\.(?:jpe?g|png|webp|avif)(?:\?[^\s"'<>()\\]*)?/gi,
+  )) {
+    const url = absoluteUrl(match[0], pageUrl);
+    const path = url.replace(/^https?:\/\/[^/]+/i, '').replace(/[?#].*$/, '');
+    if (!hosts.has(originOf(url).toLowerCase())) continue;
+    if (ids.some((id) => new RegExp(`(^|\\D)${id}(\\D|$)`).test(path))) found.push(url);
+  }
+  // Photos next to the one already named are usually its other colors, so the
+  // extra angles and details of this one come first.
+  const folders = new Set(knownUrls.map(imageFolder));
+  return [
+    ...found.filter((url) => !folders.has(imageFolder(url))),
+    ...found.filter((url) => folders.has(imageFolder(url))),
+  ];
 }
 
 type JsonLdNode = Record<string, unknown>;
@@ -436,7 +468,13 @@ export async function importFromLink(text: string): Promise<LinkImportResult> {
   const shopify = await shopifyProduct(url);
   if (shopify) product = merge(shopify, product);
   // Shopify's list is complete, and its shared files folder also holds other products' photos.
-  else product.images = [...product.images, ...galleryImages(html, product.images, url)];
+  else {
+    product.images = [
+      ...product.images,
+      ...galleryImages(html, product.images, url),
+      ...productIdImages(html, product.images, url),
+    ];
+  }
 
   // A bot-check or empty JavaScript shell page has a title but no product image.
   if (product.images.length === 0 && !product.price) {
