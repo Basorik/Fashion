@@ -69,9 +69,7 @@ export default function WardrobeScreen() {
   const visible =
     items &&
     sortItems(
-      items.filter(
-        (item) => matchesShow(item, show) && (!searching || matchesSearch(item, query)),
-      ),
+      items.filter((item) => matchesShow(item, show) && (!searching || matchesSearch(item, query))),
       sort,
     );
   const filtered = searching || show !== 'all';
