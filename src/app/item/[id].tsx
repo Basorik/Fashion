@@ -1,25 +1,45 @@
-import { Image } from 'expo-image';
-import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { Link, router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
+import { HeaderTextButton } from '@/components/add-button';
+import { Button } from '@/components/button';
+import { Chip } from '@/components/chip';
+import { ItemPhoto } from '@/components/item-photo';
+import { Stat } from '@/components/stat';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
-import { deleteItem, getItem, logWear, today, undoLastWear, type ItemWithStats } from '@/lib/db';
-import { deletePhoto, photoUri } from '@/lib/photos';
+import type { Tag } from '@/constants/tags';
+import { Radius, Spacing } from '@/constants/theme';
+import { useBusy } from '@/hooks/use-busy';
+import { formatRelativeDay } from '@/lib/dates';
+import {
+  deleteItem,
+  getItem,
+  listItemTags,
+  listWornWith,
+  logWear,
+  today,
+  undoWear,
+  type ItemWithStats,
+} from '@/lib/db';
+import { formatPrice } from '@/lib/money';
+import { deletePhoto } from '@/lib/photos';
 
 export default function ItemScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const itemId = Number(id);
   const db = useSQLiteContext();
-  const theme = useTheme();
   const [item, setItem] = useState<ItemWithStats | null>(null);
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [wornWith, setWornWith] = useState<Awaited<ReturnType<typeof listWornWith>>>([]);
+  const [busy, run] = useBusy();
 
   const load = useCallback(() => {
     getItem(db, itemId).then(setItem);
+    listWornWith(db, itemId).then(setWornWith);
+    listItemTags(db, itemId).then(setTags);
   }, [db, itemId]);
 
   useFocusEffect(load);
@@ -29,18 +49,17 @@ export default function ItemScreen() {
   }
 
   const current = item;
-  const woreToday = current.lastWorn === today();
+  const now = today();
+  const woreToday = current.lastWorn === now;
   const costPerWear =
     current.price !== null && current.wearCount > 0 ? current.price / current.wearCount : null;
 
-  async function wear() {
-    await logWear(db, current.id);
-    load();
-  }
-
-  async function undo() {
-    await undoLastWear(db, current.id);
-    load();
+  function toggleWear() {
+    run(async () => {
+      if (woreToday) await undoWear(db, current.id);
+      else await logWear(db, current.id);
+      load();
+    });
   }
 
   function confirmDelete() {
@@ -49,62 +68,103 @@ export default function ItemScreen() {
       {
         text: 'Delete',
         style: 'destructive',
-        onPress: async () => {
-          await deleteItem(db, current.id);
-          deletePhoto(current.photo);
-          router.back();
-        },
+        onPress: () =>
+          run(async () => {
+            await deleteItem(db, current.id);
+            if (current.photo) deletePhoto(current.photo);
+            router.back();
+          }),
       },
     ]);
   }
 
   return (
     <ThemedView style={styles.container}>
-      <Stack.Screen options={{ title: current.name }} />
+      <Stack.Screen
+        options={{
+          title: '',
+          headerRight: () => (
+            <HeaderTextButton
+              href={{ pathname: '/add-item', params: { id: current.id } }}
+              label="Edit"
+            />
+          ),
+        }}
+      />
       <ScrollView contentContainerStyle={styles.content}>
-        <Image source={{ uri: photoUri(current.photo) }} style={styles.photo} contentFit="cover" />
+        <ItemPhoto photo={current.photo} name={current.name} style={styles.photo} />
 
-        <View>
-          <ThemedText type="subtitle">{current.name}</ThemedText>
-          <ThemedText themeColor="textSecondary">
-            {[current.category, current.color].filter(Boolean).join(' · ')}
+        <View style={styles.heading}>
+          <ThemedText type="caption" themeColor="textSecondary">
+            {[current.category, current.brand].filter(Boolean).join(' · ')}
           </ThemedText>
+          <ThemedText type="title">{current.name}</ThemedText>
         </View>
+
+        {tags.length > 0 && (
+          <View style={styles.tags}>
+            {tags.map((tag) => (
+              <Chip key={`${tag.group}:${tag.value}`} label={tag.value} />
+            ))}
+          </View>
+        )}
 
         <View style={styles.stats}>
           <Stat label="Times worn" value={String(current.wearCount)} />
-          <Stat label="Last worn" value={current.lastWorn ?? 'Never'} />
-          <Stat label="Cost per wear" value={costPerWear === null ? '—' : costPerWear.toFixed(2)} />
+          <Stat
+            label="Last worn"
+            value={current.lastWorn ? formatRelativeDay(current.lastWorn, now) : 'Never'}
+          />
+          <Stat
+            label={costPerWear === null ? 'Price' : 'Cost per wear'}
+            value={
+              costPerWear !== null
+                ? formatPrice(costPerWear)
+                : current.price !== null
+                  ? formatPrice(current.price)
+                  : '—'
+            }
+          />
         </View>
 
-        <Pressable
-          accessibilityRole="button"
-          onPress={woreToday ? undo : wear}
-          style={[styles.button, { backgroundColor: woreToday ? theme.backgroundElement : theme.text }]}>
-          <ThemedText type="smallBold" style={{ color: woreToday ? theme.text : theme.background }}>
-            {woreToday ? 'Worn today · Undo' : 'I wore this today'}
-          </ThemedText>
-        </Pressable>
+        <View style={styles.row}>
+          <Button
+            label={woreToday ? 'Worn today · Undo' : 'I wore this today'}
+            onPress={toggleWear}
+            busy={busy}
+            variant={woreToday ? 'secondary' : 'primary'}
+          />
+        </View>
 
-        <Pressable accessibilityRole="button" onPress={confirmDelete} style={styles.deleteButton}>
-          <ThemedText type="small" style={styles.deleteText}>
-            Delete item
-          </ThemedText>
-        </Pressable>
+        {wornWith.length > 0 && (
+          <View style={styles.section}>
+            <ThemedText type="caption" themeColor="textSecondary">
+              Most often worn with
+            </ThemedText>
+            <View style={styles.pairs}>
+              {wornWith.map((other) => (
+                <Link
+                  key={other.id}
+                  href={{ pathname: '/item/[id]', params: { id: other.id } }}
+                  asChild>
+                  <Pressable accessibilityLabel={other.name} style={styles.pair}>
+                    <ItemPhoto photo={other.photo} name={other.name} style={styles.pairPhoto} />
+                    <ThemedText type="small" numberOfLines={1}>
+                      {other.name}
+                    </ThemedText>
+                    <ThemedText type="small" themeColor="textSecondary">
+                      {other.times}× together
+                    </ThemedText>
+                  </Pressable>
+                </Link>
+              ))}
+            </View>
+          </View>
+        )}
+
+        <Button label="Delete item" onPress={confirmDelete} variant="danger" />
       </ScrollView>
     </ThemedView>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  const theme = useTheme();
-  return (
-    <View style={[styles.stat, { backgroundColor: theme.backgroundElement }]}>
-      <ThemedText type="smallBold">{value}</ThemedText>
-      <ThemedText type="small" themeColor="textSecondary">
-        {label}
-      </ThemedText>
-    </View>
   );
 }
 
@@ -114,33 +174,45 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: Spacing.three,
+    paddingBottom: Spacing.five,
     gap: Spacing.three,
   },
   photo: {
     width: '100%',
     aspectRatio: 4 / 5,
-    borderRadius: 12,
+    borderRadius: Radius.large,
+  },
+  heading: {
+    gap: Spacing.one,
   },
   stats: {
     flexDirection: 'row',
     gap: Spacing.two,
   },
-  stat: {
+  tags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
+  },
+  row: {
+    flexDirection: 'row',
+  },
+  section: {
+    gap: Spacing.two,
+    marginTop: Spacing.two,
+  },
+  pairs: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  pair: {
     flex: 1,
-    borderRadius: 8,
-    padding: Spacing.three,
-    gap: Spacing.one,
+    maxWidth: '33%',
   },
-  button: {
-    alignItems: 'center',
-    borderRadius: 8,
-    paddingVertical: Spacing.three,
-  },
-  deleteButton: {
-    alignItems: 'center',
-    paddingVertical: Spacing.two,
-  },
-  deleteText: {
-    color: '#D93036',
+  pairPhoto: {
+    width: '100%',
+    aspectRatio: 4 / 5,
+    borderRadius: Radius.medium,
+    marginBottom: Spacing.one,
   },
 });

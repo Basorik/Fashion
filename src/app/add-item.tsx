@@ -1,18 +1,31 @@
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import { router } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, View } from 'react-native';
 
+import { BarcodeScanner } from '@/components/barcode-scanner';
+import { Button } from '@/components/button';
 import { CategoryChips } from '@/components/category-chips';
+import { FooterBar } from '@/components/footer-bar';
+import { TagPicker } from '@/components/tag-picker';
+import { TextField } from '@/components/text-field';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import type { Category } from '@/constants/categories';
-import { Spacing } from '@/constants/theme';
+import type { Tag } from '@/constants/tags';
+import { Radius, Spacing } from '@/constants/theme';
+import { useBusy } from '@/hooks/use-busy';
 import { useTheme } from '@/hooks/use-theme';
-import { addItem } from '@/lib/db';
-import { savePhoto } from '@/lib/photos';
+import { lookupBarcode } from '@/lib/barcode';
+import { extractLink, importFromLink } from '@/lib/link-import';
+import { inferCategory, inferTags, mergeTags, type ProductText } from '@/lib/tag-inference';
+import { addItem, getItem, listItemTags, updateItem } from '@/lib/db';
+import { parsePrice } from '@/lib/money';
+import { photoColorTags } from '@/lib/photo-colors';
+import { deletePhoto, photoUri, savePhoto } from '@/lib/photos';
+import { addWish, getWish, listWishTags, updateWish } from '@/lib/wishlist';
 
 const pickerOptions: ImagePicker.ImagePickerOptions = {
   mediaTypes: 'images',
@@ -21,15 +34,115 @@ const pickerOptions: ImagePicker.ImagePickerOptions = {
   quality: 0.8,
 };
 
-export default function AddItemScreen() {
+// A photo is either already stored for this item, or newly picked (a local
+// file or a product image URL) and not saved until the form is saved.
+type PhotoState = { stored: string } | { uri: string } | null;
+
+// Adds or edits a wardrobe item (`id`), or a wishlist entry (`list=wish`, `wishId`).
+export default function ItemFormScreen() {
+  const params = useLocalSearchParams<{ id?: string; wishId?: string; list?: 'wish' }>();
+  const isWish = params.list === 'wish' || params.wishId !== undefined;
+  const rawId = isWish ? params.wishId : params.id;
+  const editingId = rawId ? Number(rawId) : null;
   const db = useSQLiteContext();
   const theme = useTheme();
-  const [photo, setPhoto] = useState<string | null>(null);
+
+  const [loaded, setLoaded] = useState(editingId === null);
+  const [originalPhoto, setOriginalPhoto] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<PhotoState>(null);
   const [name, setName] = useState('');
   const [category, setCategory] = useState<Category>('Tops');
-  const [color, setColor] = useState('');
+  // Once the user picks a category themselves, lookups stop changing it.
+  const [categoryTouched, setCategoryTouched] = useState(editingId !== null);
+  const [brand, setBrand] = useState('');
   const [price, setPrice] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [barcode, setBarcode] = useState<string | null>(null);
+  const [url, setUrl] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [scanning, setScanning] = useState(false);
+  const [lookingUp, setLookingUp] = useState(false);
+  const [lookupMessage, setLookupMessage] = useState<string | null>(null);
+  const [saving, runSave] = useBusy();
+
+  useEffect(() => {
+    if (editingId === null) return;
+    const load = isWish
+      ? Promise.all([getWish(db, editingId), listWishTags(db, editingId)])
+      : Promise.all([getItem(db, editingId), listItemTags(db, editingId)]);
+    load.then(([entry, entryTags]) => {
+      if (entry) {
+        setOriginalPhoto(entry.photo);
+        setPhoto(entry.photo ? { stored: entry.photo } : null);
+        setName(entry.name);
+        setCategory(entry.category);
+        setBrand(entry.brand ?? '');
+        setPrice(entry.price === null ? '' : String(entry.price));
+        if ('barcode' in entry) setBarcode(entry.barcode);
+        if ('url' in entry) setUrl(entry.url ?? '');
+        setTags(entryTags);
+      }
+      setLoaded(true);
+    });
+  }, [db, editingId, isWish]);
+
+  // Fills empty fields from a looked-up product and adds tags matched from its
+  // details. Returns a note like ", with 4 tags" for the status message.
+  function applyProductDetails(
+    product: ProductText & { brand: string | null; imageUrl: string | null },
+  ) {
+    if (product.name) setName((current) => current || product.name!);
+    if (product.brand) setBrand((current) => current || product.brand!);
+    if (product.imageUrl) {
+      const imageUrl = product.imageUrl;
+      setPhoto((current) => current ?? { uri: imageUrl });
+    }
+    const inferredCategory = inferCategory(product);
+    if (inferredCategory && !categoryTouched) setCategory(inferredCategory);
+    const suggested = inferTags(product);
+    const newTags = mergeTags(tags, suggested).length - tags.length;
+    setTags((current) => mergeTags(current, suggested));
+    return newTags > 0 ? `, with ${newTags} tag${newTags === 1 ? '' : 's'}` : '';
+  }
+
+  async function importLink() {
+    setImporting(true);
+    setLookupMessage(null);
+    const result = await importFromLink(url);
+    setImporting(false);
+    if (!result.ok) {
+      setLookupMessage(
+        {
+          'no-link': "That doesn't look like a link. Paste the product page's address.",
+          blocked:
+            'This shop blocks apps from reading its pages. Fill the details in below, or save the product photo and add it from your library.',
+          'no-data': "Couldn't find product details on that page. Fill them in below.",
+          network: "Couldn't open that link. Check your connection and try again.",
+        }[result.reason],
+      );
+      return;
+    }
+    const { product } = result;
+    const link = extractLink(url);
+    if (link) setUrl(link);
+    if (product.price !== null) setPrice((current) => current || String(product.price));
+    const added = applyProductDetails(product);
+    setLookupMessage(`Filled in from the link${added}. Check the details before saving.`);
+  }
+
+  // Sets a new photo and, when the item has no color yet, tags its main colors.
+  async function applyPhoto(uri: string) {
+    setPhoto({ uri });
+    if (tags.some((tag) => tag.group === 'Color')) return;
+    const colors = await photoColorTags(uri);
+    if (colors.length === 0) return;
+    setTags((current) =>
+      current.some((tag) => tag.group === 'Color') ? current : mergeTags(current, colors),
+    );
+    setLookupMessage(
+      `Tagged ${colors.map((tag) => tag.value.toLowerCase()).join(' and ')} from the photo. Change it below if it's wrong.`,
+    );
+  }
 
   async function takePhoto() {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
@@ -38,127 +151,238 @@ export default function AddItemScreen() {
       return;
     }
     const result = await ImagePicker.launchCameraAsync(pickerOptions);
-    if (!result.canceled) setPhoto(result.assets[0].uri);
+    if (!result.canceled) applyPhoto(result.assets[0].uri);
   }
 
   async function choosePhoto() {
     const result = await ImagePicker.launchImageLibraryAsync(pickerOptions);
-    if (!result.canceled) setPhoto(result.assets[0].uri);
+    if (!result.canceled) applyPhoto(result.assets[0].uri);
   }
 
-  const parsedPrice = price.trim() === '' ? null : Number(price.replace(',', '.'));
-  const priceIsValid = parsedPrice === null || (Number.isFinite(parsedPrice) && parsedPrice >= 0);
-  const canSave = photo !== null && name.trim() !== '' && priceIsValid && !saving;
+  async function handleScanned(code: string) {
+    setScanning(false);
+    setBarcode(code);
+    setLookingUp(true);
+    setLookupMessage(null);
+    const product = await lookupBarcode(code);
+    setLookingUp(false);
+    if (!product) {
+      setLookupMessage('No product details found for this barcode. Fill them in below.');
+      return;
+    }
+    const added = applyProductDetails(product);
+    setLookupMessage(`Filled in from the barcode${added}. Check the details before saving.`);
+  }
 
-  async function save() {
-    if (!canSave || photo === null) return;
-    setSaving(true);
-    try {
-      const storedPhoto = await savePhoto(photo);
-      await addItem(db, {
+  const parsedPrice = price.trim() === '' ? null : parsePrice(price);
+  const priceIsValid = price.trim() === '' || parsedPrice !== null;
+  const canSave = loaded && name.trim() !== '' && priceIsValid;
+
+  function save() {
+    if (!canSave) return;
+    runSave(async () => {
+      const storedPhoto =
+        photo === null ? null : 'stored' in photo ? photo.stored : await savePhoto(photo.uri);
+      const common = {
         name: name.trim(),
         category,
-        color: color.trim() || null,
+        brand: brand.trim() || null,
         price: parsedPrice,
         photo: storedPhoto,
-      });
+        tags,
+      };
+      try {
+        if (isWish) {
+          const wish = { ...common, url: extractLink(url) };
+          if (editingId === null) await addWish(db, wish);
+          else await updateWish(db, editingId, wish);
+        } else {
+          const item = { ...common, barcode };
+          if (editingId === null) await addItem(db, item);
+          else await updateItem(db, editingId, item);
+        }
+      } catch (error) {
+        // Don't leave a copied photo behind for an item that wasn't saved.
+        if (storedPhoto && storedPhoto !== originalPhoto) deletePhoto(storedPhoto);
+        throw error;
+      }
+      if (originalPhoto && originalPhoto !== storedPhoto) deletePhoto(originalPhoto);
       router.back();
-    } catch (error) {
-      setSaving(false);
-      Alert.alert('Could not save item', String(error));
-    }
+    }, 'Could not save');
   }
 
-  const inputStyle = [styles.input, { backgroundColor: theme.backgroundElement, color: theme.text }];
+  const previewUri = photo === null ? null : 'stored' in photo ? photoUri(photo.stored) : photo.uri;
 
   return (
     <ThemedView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        {photo ? (
-          <Image source={{ uri: photo }} style={styles.preview} contentFit="cover" />
+      <Stack.Screen
+        options={{
+          title: `${editingId === null ? 'Add' : 'Edit'} ${isWish ? 'wishlist item' : 'item'}`,
+        }}
+      />
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        automaticallyAdjustKeyboardInsets>
+        {previewUri ? (
+          <Image
+            source={{ uri: previewUri }}
+            style={styles.preview}
+            contentFit="cover"
+            transition={150}
+            accessibilityLabel="Item photo"
+          />
         ) : (
-          <View style={[styles.preview, styles.placeholder, { backgroundColor: theme.backgroundElement }]}>
-            <ThemedText themeColor="textSecondary">Add a photo of the item</ThemedText>
+          <View
+            style={[
+              styles.preview,
+              styles.placeholder,
+              { backgroundColor: theme.backgroundElement },
+            ]}>
+            <ThemedText themeColor="textSecondary">No photo yet (optional)</ThemedText>
           </View>
         )}
-        <View style={styles.photoButtons}>
+        <View style={styles.row}>
           <Button label="Take photo" onPress={takePhoto} />
-          <Button label="Choose from library" onPress={choosePhoto} />
+          <Button label="Library" onPress={choosePhoto} />
+          {photo && (
+            <Button label="Remove" onPress={() => setPhoto(null)} grow={false} variant="plain" />
+          )}
         </View>
 
-        <ThemedText type="smallBold">Name</ThemedText>
-        <TextInput
-          value={name}
-          onChangeText={setName}
-          placeholder="e.g. White linen shirt"
-          placeholderTextColor={theme.textSecondary}
-          style={inputStyle}
-        />
+        <View style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
+          <ThemedText type="caption" themeColor="textSecondary">
+            Fill in from
+          </ThemedText>
+          <View style={styles.row}>
+            <TextField
+              value={url}
+              onChangeText={setUrl}
+              placeholder="Paste a product link"
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              returnKeyType="go"
+              onSubmitEditing={() => url.trim() && !importing && importLink()}
+              style={[styles.flex, { backgroundColor: theme.background }]}
+            />
+            <Button
+              label="Import"
+              onPress={importLink}
+              busy={importing}
+              disabled={!url.trim()}
+              grow={false}
+              variant="primary"
+            />
+          </View>
+          {!isWish && (
+            <Button
+              label={barcode ? 'Scan another barcode' : 'Scan a barcode'}
+              onPress={() => setScanning(true)}
+              variant="plain"
+            />
+          )}
+          {lookingUp && (
+            <View style={styles.lookup}>
+              <ActivityIndicator />
+              <ThemedText type="small" themeColor="textSecondary">
+                Looking up barcode {barcode}…
+              </ThemedText>
+            </View>
+          )}
+          {!lookingUp && lookupMessage && (
+            <ThemedText type="small" themeColor="textSecondary">
+              {lookupMessage}
+            </ThemedText>
+          )}
+        </View>
 
-        <ThemedText type="smallBold">Category</ThemedText>
-        <View style={styles.chips}>
-          <CategoryChips
-            selected={category}
-            onSelect={(value) => value && setCategory(value)}
-            allowAll={false}
+        <Field label="Name">
+          <TextField
+            value={name}
+            onChangeText={setName}
+            placeholder="e.g. White linen shirt"
+            autoCapitalize="sentences"
+            returnKeyType="done"
           />
+        </Field>
+
+        <Field label="Category">
+          <View style={styles.chips}>
+            <CategoryChips
+              selected={category}
+              onSelect={(value) => {
+                if (!value) return;
+                setCategory(value);
+                setCategoryTouched(true);
+              }}
+              allowAll={false}
+            />
+          </View>
+        </Field>
+
+        <Field label="Tags">
+          <TagPicker value={tags} onChange={setTags} />
+        </Field>
+
+        <View style={styles.row}>
+          <View style={styles.flex}>
+            <Field label="Brand">
+              <TextField value={brand} onChangeText={setBrand} placeholder="Optional" />
+            </Field>
+          </View>
+          <View style={styles.flex}>
+            <Field label="Price">
+              <TextField
+                value={price}
+                onChangeText={setPrice}
+                placeholder={isWish ? 'Optional' : 'For cost per wear'}
+                keyboardType="decimal-pad"
+              />
+            </Field>
+          </View>
         </View>
-
-        <ThemedText type="smallBold">Color (optional)</ThemedText>
-        <TextInput
-          value={color}
-          onChangeText={setColor}
-          placeholder="e.g. Navy"
-          placeholderTextColor={theme.textSecondary}
-          style={inputStyle}
-        />
-
-        <ThemedText type="smallBold">Price (optional)</ThemedText>
-        <TextInput
-          value={price}
-          onChangeText={setPrice}
-          placeholder="Used for cost per wear"
-          placeholderTextColor={theme.textSecondary}
-          keyboardType="decimal-pad"
-          style={inputStyle}
-        />
         {!priceIsValid && (
-          <ThemedText type="small" style={styles.error}>
+          <ThemedText type="small" themeColor="danger">
             Enter a number, like 49.99
           </ThemedText>
         )}
 
-        <Button label={saving ? 'Saving…' : 'Save item'} onPress={save} disabled={!canSave} primary />
+        {barcode && (
+          <ThemedText type="small" themeColor="textSecondary">
+            Barcode {barcode}
+          </ThemedText>
+        )}
       </ScrollView>
+      <FooterBar>
+        <Button
+          label={
+            editingId !== null ? 'Save changes' : isWish ? 'Add to wishlist' : 'Add to wardrobe'
+          }
+          onPress={save}
+          busy={saving}
+          disabled={!canSave}
+          variant="primary"
+        />
+      </FooterBar>
+      <BarcodeScanner
+        visible={scanning}
+        onScanned={handleScanned}
+        onClose={() => setScanning(false)}
+      />
     </ThemedView>
   );
 }
 
-function Button({
-  label,
-  onPress,
-  disabled,
-  primary,
-}: {
-  label: string;
-  onPress: () => void;
-  disabled?: boolean;
-  primary?: boolean;
-}) {
-  const theme = useTheme();
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <Pressable
-      accessibilityRole="button"
-      disabled={disabled}
-      onPress={onPress}
-      style={[
-        styles.button,
-        { backgroundColor: primary ? theme.text : theme.backgroundElement, opacity: disabled ? 0.4 : 1 },
-      ]}>
-      <ThemedText type="smallBold" style={{ color: primary ? theme.background : theme.text }}>
+    <View style={styles.field}>
+      <ThemedText type="caption" themeColor="textSecondary">
         {label}
       </ThemedText>
-    </Pressable>
+      {children}
+    </View>
   );
 }
 
@@ -168,41 +392,41 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: Spacing.three,
-    gap: Spacing.two,
+    paddingBottom: Spacing.five,
+    gap: Spacing.three,
   },
   preview: {
     width: '100%',
     aspectRatio: 4 / 5,
-    borderRadius: 12,
+    borderRadius: Radius.large,
   },
   placeholder: {
     alignItems: 'center',
     justifyContent: 'center',
   },
-  photoButtons: {
+  row: {
     flexDirection: 'row',
+    alignItems: 'flex-end',
     gap: Spacing.two,
-    marginBottom: Spacing.three,
   },
-  input: {
-    borderRadius: 8,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    fontSize: 16,
-    marginBottom: Spacing.two,
+  flex: {
+    flex: 1,
+  },
+  card: {
+    borderRadius: Radius.large,
+    padding: Spacing.three,
+    gap: Spacing.two,
+  },
+  lookup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  field: {
+    gap: Spacing.two,
   },
   chips: {
     marginHorizontal: -Spacing.three,
-    marginBottom: Spacing.two,
-  },
-  error: {
-    color: '#D93036',
-  },
-  button: {
-    flex: 1,
-    alignItems: 'center',
-    borderRadius: 8,
-    paddingVertical: Spacing.three,
-    marginTop: Spacing.two,
+    marginVertical: -Spacing.two,
   },
 });

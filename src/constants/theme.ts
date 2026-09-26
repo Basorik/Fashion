@@ -1,6 +1,6 @@
 /**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
+ * Bella's colors, type and spacing. Warm neutrals with one rosewood accent,
+ * used for primary actions and the active tab. Every color has a light and dark value.
  */
 
 import '@/global.css';
@@ -9,18 +9,26 @@ import { Platform } from 'react-native';
 
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
+    text: '#1C1917',
+    textSecondary: '#6F6862',
+    background: '#FBF9F7',
+    backgroundElement: '#F1EDE8',
+    backgroundSelected: '#E5DFD8',
+    border: '#E5DFD8',
+    accent: '#9E4636',
+    onAccent: '#FFFFFF',
+    danger: '#B42318',
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
+    text: '#F5F2EE',
+    textSecondary: '#A8A29E',
+    background: '#0F0E0D',
+    backgroundElement: '#1F1D1B',
+    backgroundSelected: '#2E2B28',
+    border: '#2E2B28',
+    accent: '#E3907B',
+    onAccent: '#1C1917',
+    danger: '#F97066',
   },
 } as const;
 
@@ -59,6 +67,13 @@ export const Spacing = {
   four: 24,
   five: 32,
   six: 64,
+} as const;
+
+export const Radius = {
+  small: 8,
+  medium: 12,
+  large: 16,
+  pill: 999,
 } as const;
 
 export const MaxContentWidth = 800;
