@@ -15,6 +15,11 @@ export default function RootLayout() {
           <Stack.Screen name="item/[id]" options={{ title: '' }} />
           <Stack.Screen name="new-outfit" options={{ title: 'New outfit', presentation: 'modal' }} />
           <Stack.Screen name="outfit/[id]" options={{ title: '' }} />
+          <Stack.Screen name="pick-outfit" options={{ title: 'Pick outfit', presentation: 'modal' }} />
+          <Stack.Screen name="pick-items" options={{ title: 'Add items', presentation: 'modal' }} />
+          <Stack.Screen name="wish/[id]" options={{ title: '' }} />
+          <Stack.Screen name="new-trip" options={{ title: 'New packing list', presentation: 'modal' }} />
+          <Stack.Screen name="trip/[id]" options={{ title: '' }} />
         </Stack>
       </SQLiteProvider>
     </ThemeProvider>

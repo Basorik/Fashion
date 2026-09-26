@@ -2,6 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import type { Category } from '@/constants/categories';
 import type { Tag } from '@/constants/tags';
+import { toDateString } from '@/lib/dates';
 
 export const DATABASE_NAME = 'bella.db';
 
@@ -26,7 +27,7 @@ export type ItemInput = Pick<Item, 'name' | 'category' | 'brand' | 'price' | 'ph
   tags: Tag[];
 };
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 // Runs once when the app opens. Each block upgrades the schema by one version,
 // so existing users keep their data when new tables or columns are added.
@@ -119,6 +120,54 @@ export async function migrate(db: SQLiteDatabase) {
     });
     await db.execAsync('PRAGMA foreign_keys = ON');
     version = 3;
+  }
+
+  if (version < 4) {
+    await db.execAsync(`
+      CREATE TABLE plans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        planned_on TEXT NOT NULL,
+        outfit_id INTEGER NOT NULL REFERENCES outfits(id) ON DELETE CASCADE
+      );
+      CREATE INDEX plans_planned_on ON plans(planned_on);
+
+      CREATE TABLE wishes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        category TEXT NOT NULL,
+        brand TEXT,
+        price REAL,
+        url TEXT,
+        photo TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE TABLE wish_tags (
+        wish_id INTEGER NOT NULL REFERENCES wishes(id) ON DELETE CASCADE,
+        tag_group TEXT NOT NULL,
+        value TEXT NOT NULL,
+        PRIMARY KEY (wish_id, tag_group, value)
+      );
+
+      CREATE TABLE trips (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        start_on TEXT,
+        end_on TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE TABLE trip_items (
+        trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+        item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+        packed INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (trip_id, item_id)
+      );
+
+      -- Where each item sits on the outfit board, as fractions of the board size.
+      ALTER TABLE outfit_items ADD COLUMN x REAL;
+      ALTER TABLE outfit_items ADD COLUMN y REAL;
+      ALTER TABLE outfit_items ADD COLUMN scale REAL;
+    `);
+    version = 4;
   }
 
   await db.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION}`);
@@ -216,12 +265,8 @@ export async function deleteItem(db: SQLiteDatabase, id: number) {
   await db.runAsync('DELETE FROM items WHERE id = ?', id);
 }
 
-// Dates are stored as local YYYY-MM-DD so "today" matches the user's calendar.
 export function today() {
-  const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${now.getFullYear()}-${month}-${day}`;
+  return toDateString(new Date());
 }
 
 export async function logWear(db: SQLiteDatabase, itemId: number, wornOn = today()) {

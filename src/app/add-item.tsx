@@ -16,8 +16,10 @@ import type { Tag } from '@/constants/tags';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { lookupBarcode } from '@/lib/barcode';
+import { importFromLink } from '@/lib/link-import';
 import { addItem, getItem, listItemTags, updateItem } from '@/lib/db';
 import { deletePhoto, photoUri, savePhoto } from '@/lib/photos';
+import { addWish, getWish, listWishTags, updateWish } from '@/lib/wishlist';
 
 const pickerOptions: ImagePicker.ImagePickerOptions = {
   mediaTypes: 'images',
@@ -30,10 +32,12 @@ const pickerOptions: ImagePicker.ImagePickerOptions = {
 // file or a product image URL) and not saved until the form is saved.
 type PhotoState = { stored: string } | { uri: string } | null;
 
-// Adds a new item, or edits one when opened with an `id` param.
+// Adds or edits a wardrobe item (`id`), or a wishlist entry (`list=wish`, `wishId`).
 export default function ItemFormScreen() {
-  const { id } = useLocalSearchParams<{ id?: string }>();
-  const editingId = id ? Number(id) : null;
+  const params = useLocalSearchParams<{ id?: string; wishId?: string; list?: 'wish' }>();
+  const isWish = params.list === 'wish' || params.wishId !== undefined;
+  const rawId = isWish ? params.wishId : params.id;
+  const editingId = rawId ? Number(rawId) : null;
   const db = useSQLiteContext();
   const theme = useTheme();
 
@@ -45,6 +49,8 @@ export default function ItemFormScreen() {
   const [brand, setBrand] = useState('');
   const [price, setPrice] = useState('');
   const [barcode, setBarcode] = useState<string | null>(null);
+  const [url, setUrl] = useState('');
+  const [importing, setImporting] = useState(false);
   const [tags, setTags] = useState<Tag[]>([]);
   const [scanning, setScanning] = useState(false);
   const [lookingUp, setLookingUp] = useState(false);
@@ -53,20 +59,48 @@ export default function ItemFormScreen() {
 
   useEffect(() => {
     if (editingId === null) return;
-    Promise.all([getItem(db, editingId), listItemTags(db, editingId)]).then(([item, itemTags]) => {
-      if (item) {
-        setOriginalPhoto(item.photo);
-        setPhoto(item.photo ? { stored: item.photo } : null);
-        setName(item.name);
-        setCategory(item.category);
-        setBrand(item.brand ?? '');
-        setPrice(item.price === null ? '' : String(item.price));
-        setBarcode(item.barcode);
-        setTags(itemTags);
+    const load = isWish
+      ? Promise.all([getWish(db, editingId), listWishTags(db, editingId)])
+      : Promise.all([getItem(db, editingId), listItemTags(db, editingId)]);
+    load.then(([entry, entryTags]) => {
+      if (entry) {
+        setOriginalPhoto(entry.photo);
+        setPhoto(entry.photo ? { stored: entry.photo } : null);
+        setName(entry.name);
+        setCategory(entry.category);
+        setBrand(entry.brand ?? '');
+        setPrice(entry.price === null ? '' : String(entry.price));
+        if ('barcode' in entry) setBarcode(entry.barcode);
+        if ('url' in entry) setUrl(entry.url ?? '');
+        setTags(entryTags);
       }
       setLoaded(true);
     });
-  }, [db, editingId]);
+  }, [db, editingId, isWish]);
+
+  async function importLink() {
+    const link = url.trim();
+    if (!/^https?:\/\//i.test(link)) {
+      setLookupMessage('Paste a full link starting with https://');
+      return;
+    }
+    setImporting(true);
+    setLookupMessage(null);
+    const product = await importFromLink(link);
+    setImporting(false);
+    if (!product) {
+      setLookupMessage("Couldn't read product details from that page. Fill them in below.");
+      return;
+    }
+    if (product.name) setName((current) => current || product.name!);
+    if (product.brand) setBrand((current) => current || product.brand!);
+    if (product.price !== null) setPrice((current) => current || String(product.price));
+    if (product.imageUrl) {
+      const imageUrl = product.imageUrl;
+      setPhoto((current) => current ?? { uri: imageUrl });
+    }
+    setLookupMessage('Filled in from the link. Check the details before saving.');
+  }
 
   async function takePhoto() {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
@@ -120,21 +154,24 @@ export default function ItemFormScreen() {
     try {
       const storedPhoto =
         photo === null ? null : 'stored' in photo ? photo.stored : await savePhoto(photo.uri);
-      const input = {
+      const common = {
         name: name.trim(),
         category,
         brand: brand.trim() || null,
         price: parsedPrice,
         photo: storedPhoto,
-        barcode,
         tags,
       };
-      if (editingId === null) {
-        await addItem(db, input);
+      if (isWish) {
+        const wish = { ...common, url: url.trim() || null };
+        if (editingId === null) await addWish(db, wish);
+        else await updateWish(db, editingId, wish);
       } else {
-        await updateItem(db, editingId, input);
-        if (originalPhoto && originalPhoto !== storedPhoto) deletePhoto(originalPhoto);
+        const item = { ...common, barcode };
+        if (editingId === null) await addItem(db, item);
+        else await updateItem(db, editingId, item);
       }
+      if (originalPhoto && originalPhoto !== storedPhoto) deletePhoto(originalPhoto);
       router.back();
     } catch (error) {
       setSaving(false);
@@ -147,7 +184,11 @@ export default function ItemFormScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <Stack.Screen options={{ title: editingId === null ? 'Add item' : 'Edit item' }} />
+      <Stack.Screen
+        options={{
+          title: `${editingId === null ? 'Add' : 'Edit'} ${isWish ? 'wishlist item' : 'item'}`,
+        }}
+      />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {previewUri ? (
           <Image source={{ uri: previewUri }} style={styles.preview} contentFit="cover" />
@@ -161,8 +202,25 @@ export default function ItemFormScreen() {
           <Button label="Library" onPress={choosePhoto} />
           {photo && <Button label="Remove" onPress={() => setPhoto(null)} />}
         </View>
-        <View style={styles.row}>
-          <Button label={barcode ? 'Scan again' : 'Scan barcode'} onPress={() => setScanning(true)} />
+        {!isWish && (
+          <View style={styles.row}>
+            <Button label={barcode ? 'Scan again' : 'Scan barcode'} onPress={() => setScanning(true)} />
+          </View>
+        )}
+        <View style={styles.linkRow}>
+          <TextInput
+            value={url}
+            onChangeText={setUrl}
+            placeholder="Paste a product link"
+            placeholderTextColor={theme.textSecondary}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+            style={[inputStyle, styles.linkInput]}
+          />
+          <View style={styles.linkButton}>
+            <Button label={importing ? '…' : 'Import'} onPress={importLink} disabled={importing || !url.trim()} />
+          </View>
         </View>
         {lookingUp && (
           <View style={styles.lookup}>
@@ -233,7 +291,7 @@ export default function ItemFormScreen() {
 
         <View style={styles.row}>
           <Button
-            label={saving ? 'Saving…' : editingId === null ? 'Save item' : 'Save changes'}
+            label={saving ? 'Saving…' : editingId === null ? (isWish ? 'Add to wishlist' : 'Save item') : 'Save changes'}
             onPress={save}
             disabled={!canSave}
             primary
@@ -271,6 +329,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
+  },
+  linkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  linkInput: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  linkButton: {
+    width: 96,
+    flexDirection: 'row',
+    marginTop: -Spacing.two,
   },
   label: {
     marginTop: Spacing.three,

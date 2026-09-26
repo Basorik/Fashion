@@ -49,6 +49,12 @@
           "microphonePermission": false,
           "recordAudioAndroid": false
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Bella uses your location to check the local weather for outfit suggestions."
+        }
       ]
     ],
     "experiments": {
