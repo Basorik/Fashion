@@ -11,6 +11,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useBusy } from '@/hooks/use-busy';
+import { useDiscardGuard } from '@/hooks/use-discard-guard';
 import { formatDay, formatMonth } from '@/lib/dates';
 import { today } from '@/lib/db';
 import { addTrip } from '@/lib/trips';
@@ -25,6 +26,7 @@ export default function NewTripScreen() {
   }));
   const [start, setStart] = useState<string | null>(null);
   const [end, setEnd] = useState<string | null>(null);
+  const leave = useDiscardGuard(name.trim() !== '' || start !== null);
 
   // First tap sets the start, second tap the end; a third tap starts over.
   function selectDay(day: string) {
@@ -49,7 +51,7 @@ export default function NewTripScreen() {
   function create() {
     run(async () => {
       const tripId = await addTrip(db, name.trim(), start, end ?? start);
-      router.replace({ pathname: '/trip/[id]', params: { id: tripId } });
+      leave(() => router.replace({ pathname: '/trip/[id]', params: { id: tripId } }));
     }, 'Could not create packing list');
   }
 

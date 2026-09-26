@@ -18,6 +18,7 @@ import type { Category } from '@/constants/categories';
 import type { Tag } from '@/constants/tags';
 import { Radius, Spacing } from '@/constants/theme';
 import { useBusy } from '@/hooks/use-busy';
+import { useDiscardGuard } from '@/hooks/use-discard-guard';
 import { useTheme } from '@/hooks/use-theme';
 import { lookupBarcode } from '@/lib/barcode';
 import { extractLink, importFromLink } from '@/lib/link-import';
@@ -259,6 +260,25 @@ export default function ItemFormScreen() {
   const purchasedOnIsValid = purchasedOn.trim() === '' || parsedPurchasedOn !== null;
   const canSave = loaded && name.trim() !== '' && priceIsValid && purchasedOnIsValid;
 
+  // What the form holds, compared with what it held once loaded, to ask before
+  // throwing away changes.
+  const snapshot = JSON.stringify([
+    photo,
+    name,
+    category,
+    brand,
+    price,
+    barcode,
+    notes,
+    store,
+    purchasedOn,
+    url,
+    tags,
+  ]);
+  const [loadedSnapshot, setLoadedSnapshot] = useState<string | null>(null);
+  if (loaded && loadedSnapshot === null) setLoadedSnapshot(snapshot);
+  const leave = useDiscardGuard(loadedSnapshot !== null && snapshot !== loadedSnapshot);
+
   function save() {
     if (!canSave) return;
     runSave(async () => {
@@ -300,7 +320,7 @@ export default function ItemFormScreen() {
         throw error;
       }
       if (originalPhoto && originalPhoto !== storedPhoto) deletePhoto(originalPhoto);
-      router.back();
+      leave(() => router.back());
     }, 'Could not save');
   }
 

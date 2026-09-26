@@ -22,6 +22,16 @@ export const WardrobeShows = {
 
 export type WardrobeShow = keyof typeof WardrobeShows;
 
+// True when every word typed appears in the item's name, brand or tags.
+export function matchesSearch(item: ItemWithStats, query: string) {
+  const haystack = [item.name, item.brand, item.tagText].join(' ').toLowerCase();
+  return query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .every((word) => haystack.includes(word));
+}
+
 export function matchesShow(item: ItemWithStats, show: WardrobeShow) {
   if (show === 'archived') return item.archivedAt !== null;
   if (item.archivedAt !== null) return false;
