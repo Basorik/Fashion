@@ -8,7 +8,7 @@ Built with [Expo](https://expo.dev) (React Native + TypeScript) and Expo Router.
 
 - **Wardrobe grid**: every item you own, filterable by category.
 - **Add an item** three ways: from a photo (camera or library), by scanning its barcode, or by hand with just a name. Photo, brand and price are optional.
-- **Tags**: describe items by color, style, season, material and pattern, from presets or your own tags.
+- **Tags**: describe items by color, style, season, material, pattern and size, from presets or your own tags.
 - **Barcode lookup**: scanning a UPC/EAN code looks the product up in [UPCitemdb](https://www.upcitemdb.com)'s free trial API (about 100 lookups a day, no key) and fills in the name, brand, color and product photo when it finds a match. Clothing coverage is patchy, so a miss just leaves the form for you to fill.
 - **Background removal, on the phone** (development build only, see below): a new photo has its background removed automatically, with a button to keep the original. Any photo can be cut out later from the edit screen. Cut-outs are shown whole in the wardrobe, outfits and on the outfit board. iOS uses Apple Vision (iOS 17 or later); Android uses Google ML Kit. No photo leaves the phone.
 - **Color tags from the photo** work everywhere, including Expo Go. With a cut-out, only the item's own pixels count.

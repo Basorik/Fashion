@@ -9,6 +9,8 @@ export type ProductText = {
   color?: string | null;
   material?: string | null;
   pattern?: string | null;
+  // The size chosen in the link, like a Shopify ?variant= link. Never guessed.
+  size?: string | null;
   category?: string | null;
   description?: string | null;
   keywords?: string[];
@@ -503,6 +505,7 @@ export function inferTags(product: ProductText): Tag[] {
     ],
     ['Style', matches(everything, STYLE_WORDS)],
     ['Season', matches(everything, SEASON_WORDS)],
+    ['Size', product.size ? [sizeTag(product.size)] : []],
   ];
 
   const tags: Tag[] = [];
@@ -522,6 +525,27 @@ export function inferTags(product: ProductText): Tag[] {
     );
   }
   return tags;
+}
+
+const LETTER_SIZES: Record<string, string> = {
+  'extra small': 'XS',
+  'x-small': 'XS',
+  small: 'S',
+  medium: 'M',
+  large: 'L',
+  'extra large': 'XL',
+  'x-large': 'XL',
+  xxl: 'XXL',
+  '2xl': 'XXL',
+  'xx-large': 'XXL',
+};
+
+// "Medium" -> "M", "xl" -> "XL"; anything else (32, UK 10, 9.5) is kept as written.
+function sizeTag(size: string) {
+  const trimmed = size.trim();
+  const lower = trimmed.toLowerCase();
+  if (LETTER_SIZES[lower]) return LETTER_SIZES[lower];
+  return /^(x*s|m|x*l)$/i.test(trimmed) ? trimmed.toUpperCase() : trimmed;
 }
 
 function unique(values: string[]) {
