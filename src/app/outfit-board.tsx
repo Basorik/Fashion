@@ -4,10 +4,12 @@ import { useEffect, useState } from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { Button } from '@/components/button';
+import { FooterBar } from '@/components/footer-bar';
 import { OutfitBoard } from '@/components/outfit-board';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { useBusy } from '@/hooks/use-busy';
 import { getBoard, saveBoard, type BoardPiece } from '@/lib/board';
 
 // Arrange an outfit's items on a board: drag to move, pinch to resize, tap to bring forward.
@@ -17,6 +19,7 @@ export default function OutfitBoardScreen() {
   const db = useSQLiteContext();
   const { width } = useWindowDimensions();
   const [pieces, setPieces] = useState<BoardPiece[] | null>(null);
+  const [saving, run] = useBusy();
 
   useEffect(() => {
     getBoard(db, outfitId).then(({ pieces: loaded }) => setPieces(loaded));
@@ -38,23 +41,38 @@ export default function OutfitBoardScreen() {
     });
   }
 
-  async function save() {
+  function save() {
     if (!pieces) return;
-    await saveBoard(db, outfitId, pieces);
-    router.back();
+    run(async () => {
+      await saveBoard(db, outfitId, pieces);
+      router.back();
+    }, 'Could not save layout');
   }
 
   return (
     <ThemedView style={styles.container}>
-      <ThemedText type="small" themeColor="textSecondary">
-        Drag to move, pinch to resize, tap to bring to the front.
-      </ThemedText>
-      {pieces && (
-        <OutfitBoard pieces={pieces} size={size} onChange={update} onBringToFront={bringToFront} />
-      )}
-      <View style={styles.row}>
-        <Button label="Save layout" onPress={save} disabled={!pieces} primary />
+      <View style={styles.content}>
+        <ThemedText type="small" themeColor="textSecondary">
+          Drag to move, pinch to resize, tap to bring to the front.
+        </ThemedText>
+        {pieces && (
+          <OutfitBoard
+            pieces={pieces}
+            size={size}
+            onChange={update}
+            onBringToFront={bringToFront}
+          />
+        )}
       </View>
+      <FooterBar>
+        <Button
+          label="Save layout"
+          onPress={save}
+          busy={saving}
+          disabled={!pieces}
+          variant="primary"
+        />
+      </FooterBar>
     </ThemedView>
   );
 }
@@ -62,10 +80,10 @@ export default function OutfitBoardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  content: {
+    flex: 1,
     padding: Spacing.three,
     gap: Spacing.three,
-  },
-  row: {
-    flexDirection: 'row',
   },
 });

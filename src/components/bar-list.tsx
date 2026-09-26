@@ -13,6 +13,7 @@ type Props = {
 export function BarList({ rows, format = String }: Props) {
   const theme = useTheme();
   const max = Math.max(...rows.map((row) => row.value), 1);
+  // A faint track behind each bar makes short bars easier to compare.
   return (
     <View style={styles.list}>
       {rows.map((row) => (
@@ -24,11 +25,14 @@ export function BarList({ rows, format = String }: Props) {
           <ThemedText type="small" style={styles.label} numberOfLines={1}>
             {row.label}
           </ThemedText>
-          <View style={styles.track}>
+          <View style={[styles.track, { backgroundColor: theme.backgroundElement }]}>
             <View
               style={[
                 styles.bar,
-                { width: `${Math.max((row.value / max) * 100, 2)}%`, backgroundColor: theme.text },
+                {
+                  width: `${Math.max((row.value / max) * 100, 2)}%`,
+                  backgroundColor: theme.accent,
+                },
               ]}
             />
           </View>
@@ -56,11 +60,12 @@ const styles = StyleSheet.create({
   track: {
     flex: 1,
     height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
   },
   bar: {
     height: 8,
-    borderTopRightRadius: 4,
-    borderBottomRightRadius: 4,
+    borderRadius: 4,
   },
   value: {
     width: 56,

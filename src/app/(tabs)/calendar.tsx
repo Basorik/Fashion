@@ -5,11 +5,12 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { ItemPhoto } from '@/components/item-photo';
-import { MonthGrid } from '@/components/month-grid';
+import { MonthGrid, MonthHeader } from '@/components/month-grid';
 import { TodaySuggestions } from '@/components/today-suggestions';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { useBusy } from '@/hooks/use-busy';
 import { useTheme } from '@/hooks/use-theme';
 import {
   getDayDetail,
@@ -33,6 +34,7 @@ export default function CalendarScreen() {
   const [selected, setSelected] = useState(today);
   const [marks, setMarks] = useState<DayMarks>({});
   const [detail, setDetail] = useState<DayDetail | null>(null);
+  const [, run] = useBusy();
 
   const load = useCallback(() => {
     const from = toDateString(new Date(cursor.year, cursor.month, 1));
@@ -58,18 +60,7 @@ export default function CalendarScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <TodaySuggestions />
 
-        <View style={styles.monthHeader}>
-          <Pressable
-            accessibilityLabel="Previous month"
-            hitSlop={12}
-            onPress={() => shiftMonth(-1)}>
-            <ThemedText type="subtitle">‹</ThemedText>
-          </Pressable>
-          <ThemedText type="smallBold">{formatMonth(cursor.year, cursor.month)}</ThemedText>
-          <Pressable accessibilityLabel="Next month" hitSlop={12} onPress={() => shiftMonth(1)}>
-            <ThemedText type="subtitle">›</ThemedText>
-          </Pressable>
-        </View>
+        <MonthHeader title={formatMonth(cursor.year, cursor.month)} onShift={shiftMonth} />
         <MonthGrid
           year={cursor.year}
           month={cursor.month}
@@ -88,7 +79,7 @@ export default function CalendarScreen() {
             key={plan.planId}
             style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
             <View style={styles.cardText}>
-              <ThemedText type="small" themeColor="textSecondary">
+              <ThemedText type="caption" themeColor="textSecondary">
                 Planned
               </ThemedText>
               <Link href={{ pathname: '/outfit/[id]', params: { id: plan.outfitId } }}>
@@ -98,21 +89,30 @@ export default function CalendarScreen() {
             {isPastOrToday && (
               <Pressable
                 accessibilityRole="button"
-                onPress={async () => {
-                  await logOutfitWear(db, plan.outfitId, selected);
-                  await removePlan(db, plan.planId);
-                  load();
-                }}>
-                <ThemedText type="smallBold">Wore it</ThemedText>
+                accessibilityLabel={`Wore ${plan.name}`}
+                hitSlop={8}
+                onPress={() =>
+                  run(async () => {
+                    await logOutfitWear(db, plan.outfitId, selected);
+                    await removePlan(db, plan.planId);
+                    load();
+                  })
+                }>
+                <ThemedText type="smallBold" style={{ color: theme.accent }}>
+                  Wore it
+                </ThemedText>
               </Pressable>
             )}
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Remove plan ${plan.name}`}
-              onPress={async () => {
-                await removePlan(db, plan.planId);
-                load();
-              }}>
+              hitSlop={8}
+              onPress={() =>
+                run(async () => {
+                  await removePlan(db, plan.planId);
+                  load();
+                })
+              }>
               <ThemedText type="small" themeColor="textSecondary">
                 Remove
               </ThemedText>
@@ -125,7 +125,7 @@ export default function CalendarScreen() {
             key={outfit.wearId}
             style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
             <View style={styles.cardText}>
-              <ThemedText type="small" themeColor="textSecondary">
+              <ThemedText type="caption" themeColor="textSecondary">
                 Wore outfit
               </ThemedText>
               <Link href={{ pathname: '/outfit/[id]', params: { id: outfit.outfitId } }}>
@@ -135,10 +135,13 @@ export default function CalendarScreen() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Remove wear of ${outfit.name}`}
-              onPress={async () => {
-                await removeOutfitWear(db, outfit.wearId);
-                load();
-              }}>
+              hitSlop={8}
+              onPress={() =>
+                run(async () => {
+                  await removeOutfitWear(db, outfit.wearId);
+                  load();
+                })
+              }>
               <ThemedText type="small" themeColor="textSecondary">
                 Remove
               </ThemedText>
@@ -167,9 +170,12 @@ export default function CalendarScreen() {
           </ScrollView>
         )}
 
-        {detail && detail.items.length === 0 && detail.plans.length === 0 && (
-          <ThemedText themeColor="textSecondary">Nothing logged or planned.</ThemedText>
-        )}
+        {detail &&
+          detail.items.length === 0 &&
+          detail.plans.length === 0 &&
+          detail.outfits.length === 0 && (
+            <ThemedText themeColor="textSecondary">Nothing logged or planned.</ThemedText>
+          )}
 
         <View style={styles.actions}>
           {isPastOrToday && (
@@ -203,12 +209,6 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
     paddingBottom: Spacing.six,
   },
-  monthHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.two,
-  },
   dayTitle: {
     marginTop: Spacing.two,
   },
@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.three,
-    borderRadius: 8,
+    borderRadius: Radius.medium,
     padding: Spacing.three,
   },
   cardText: {
@@ -231,7 +231,7 @@ const styles = StyleSheet.create({
   itemPhoto: {
     width: 80,
     height: 100,
-    borderRadius: 8,
+    borderRadius: Radius.small,
     marginBottom: Spacing.one,
   },
   actions: {

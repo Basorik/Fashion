@@ -1,71 +1,83 @@
-import { router } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useState } from 'react';
-import { Alert, StyleSheet, TextInput, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/button';
+import { FooterBar } from '@/components/footer-bar';
 import { ItemSelectGrid } from '@/components/item-select-grid';
+import { TextField } from '@/components/text-field';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
-import { addOutfit } from '@/lib/db';
+import { useBusy } from '@/hooks/use-busy';
+import { addOutfit, getOutfit, listOutfitItems, updateOutfit } from '@/lib/db';
 
-export default function NewOutfitScreen() {
+// Creates an outfit, or edits one (`id`): its name and which items are in it.
+export default function OutfitFormScreen() {
+  const params = useLocalSearchParams<{ id?: string }>();
+  const editingId = params.id ? Number(params.id) : null;
   const db = useSQLiteContext();
-  const theme = useTheme();
   // Kept in tap order, which becomes the order items show in the outfit.
   const [selected, setSelected] = useState<number[]>([]);
   const [name, setName] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [loaded, setLoaded] = useState(editingId === null);
+  const [saving, run] = useBusy();
 
-  const canSave = selected.length >= 2 && name.trim() !== '' && !saving;
+  useEffect(() => {
+    if (editingId === null) return;
+    Promise.all([getOutfit(db, editingId), listOutfitItems(db, editingId)]).then(
+      ([outfit, items]) => {
+        if (outfit) setName(outfit.name);
+        setSelected(items.map((item) => item.id));
+        setLoaded(true);
+      },
+    );
+  }, [db, editingId]);
 
-  async function save() {
+  const canSave = loaded && selected.length >= 2 && name.trim() !== '';
+
+  function save() {
     if (!canSave) return;
-    setSaving(true);
-    try {
-      await addOutfit(db, name.trim(), selected);
+    run(async () => {
+      if (editingId === null) await addOutfit(db, name.trim(), selected);
+      else await updateOutfit(db, editingId, name.trim(), selected);
       router.back();
-    } catch (error) {
-      setSaving(false);
-      Alert.alert('Could not save outfit', String(error));
-    }
+    }, 'Could not save outfit');
   }
 
   return (
     <ThemedView style={styles.container}>
+      <Stack.Screen options={{ title: editingId === null ? 'New outfit' : 'Edit outfit' }} />
       <ItemSelectGrid
         selected={selected}
         onChange={setSelected}
         header={
           <View style={styles.header}>
-            <TextInput
+            <TextField
               value={name}
               onChangeText={setName}
               placeholder="Outfit name, e.g. Friday office"
-              placeholderTextColor={theme.textSecondary}
-              style={[
-                styles.input,
-                { backgroundColor: theme.backgroundElement, color: theme.text },
-              ]}
+              autoCapitalize="sentences"
+              returnKeyType="done"
             />
             <ThemedText type="small" themeColor="textSecondary">
               {selected.length === 0
-                ? 'Pick at least two items'
+                ? 'Tap at least two items. The order you tap is the order they show in.'
                 : `${selected.length} item${selected.length === 1 ? '' : 's'} selected`}
             </ThemedText>
           </View>
         }
       />
-      <View style={[styles.footer, { borderTopColor: theme.backgroundSelected }]}>
+      <FooterBar>
         <Button
-          label={saving ? 'Saving…' : 'Save outfit'}
+          label={editingId === null ? 'Save outfit' : 'Save changes'}
           onPress={save}
+          busy={saving}
           disabled={!canSave}
-          primary
+          variant="primary"
         />
-      </View>
+      </FooterBar>
     </ThemedView>
   );
 }
@@ -76,17 +88,5 @@ const styles = StyleSheet.create({
   },
   header: {
     gap: Spacing.two,
-  },
-  input: {
-    borderRadius: 8,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    fontSize: 16,
-  },
-  footer: {
-    flexDirection: 'row',
-    paddingHorizontal: Spacing.three,
-    paddingBottom: Spacing.five,
-    borderTopWidth: StyleSheet.hairlineWidth,
   },
 });

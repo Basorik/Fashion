@@ -7,9 +7,10 @@ import { Button } from '@/components/button';
 import { ItemPhoto } from '@/components/item-photo';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { formatDay } from '@/lib/dates';
+import { formatPrice } from '@/lib/money';
 import { listTrips, type Trip } from '@/lib/trips';
 import { listWishesByFit, type WishWithMatches } from '@/lib/wishlist';
 
@@ -44,7 +45,11 @@ export default function ListsScreen() {
             accessibilityState={{ selected: tab === segment.key }}
             onPress={() => setTab(segment.key)}
             style={[styles.segment, tab === segment.key && { backgroundColor: theme.background }]}>
-            <ThemedText type="smallBold">{segment.label}</ThemedText>
+            <ThemedText
+              type="smallBold"
+              themeColor={tab === segment.key ? 'text' : 'textSecondary'}>
+              {segment.label}
+            </ThemedText>
           </Pressable>
         ))}
       </View>
@@ -55,11 +60,11 @@ export default function ListsScreen() {
           keyExtractor={(wish) => String(wish.id)}
           contentContainerStyle={styles.list}
           ListHeaderComponent={
-            <View style={styles.headerRow}>
-              <ThemedText type="small" themeColor="textSecondary" style={styles.flex}>
+            wishes.length > 0 ? (
+              <ThemedText type="small" themeColor="textSecondary">
                 Sorted by how many things you own each one would go with.
               </ThemedText>
-            </View>
+            ) : null
           }
           ListEmptyComponent={
             <ThemedText themeColor="textSecondary" style={styles.empty}>
@@ -72,21 +77,28 @@ export default function ListsScreen() {
               <Button
                 label="Add to wishlist"
                 onPress={() => router.push({ pathname: '/add-item', params: { list: 'wish' } })}
+                variant={wishes.length === 0 ? 'primary' : 'secondary'}
               />
             </View>
           }
           renderItem={({ item: wish }) => (
             <Link href={{ pathname: '/wish/[id]', params: { id: wish.id } }} asChild>
-              <Pressable accessibilityLabel={wish.name} style={styles.entry}>
+              <Pressable
+                accessibilityLabel={wish.name}
+                style={({ pressed }) => [styles.entry, pressed && styles.pressed]}>
                 <ItemPhoto photo={wish.photo} name={wish.name} style={styles.thumb} />
                 <View style={styles.flex}>
                   <ThemedText numberOfLines={1}>{wish.name}</ThemedText>
                   <ThemedText type="small" themeColor="textSecondary">
-                    {[wish.category, wish.brand, wish.price === null ? null : wish.price.toFixed(2)]
+                    {[
+                      wish.category,
+                      wish.brand,
+                      wish.price === null ? null : formatPrice(wish.price),
+                    ]
                       .filter(Boolean)
                       .join(' · ')}
                   </ThemedText>
-                  <ThemedText type="smallBold">
+                  <ThemedText type="smallBold" style={{ color: theme.accent }}>
                     Goes with {wish.matches} item{wish.matches === 1 ? '' : 's'} you own
                   </ThemedText>
                 </View>
@@ -106,15 +118,23 @@ export default function ListsScreen() {
           }
           ListFooterComponent={
             <View style={styles.row}>
-              <Button label="New packing list" onPress={() => router.push('/new-trip')} />
+              <Button
+                label="New packing list"
+                onPress={() => router.push('/new-trip')}
+                variant={trips.length === 0 ? 'primary' : 'secondary'}
+              />
             </View>
           }
           renderItem={({ item: trip }) => (
             <Link href={{ pathname: '/trip/[id]', params: { id: trip.id } }} asChild>
               <Pressable
                 accessibilityLabel={trip.name}
-                style={[styles.tripCard, { backgroundColor: theme.backgroundElement }]}>
-                <ThemedText type="smallBold">{trip.name}</ThemedText>
+                style={({ pressed }) => [
+                  styles.tripCard,
+                  { backgroundColor: theme.backgroundElement },
+                  pressed && styles.pressed,
+                ]}>
+                <ThemedText type="subtitle">{trip.name}</ThemedText>
                 <ThemedText type="small" themeColor="textSecondary">
                   {[
                     trip.startOn &&
@@ -143,21 +163,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     margin: Spacing.three,
     marginBottom: 0,
-    borderRadius: 10,
+    borderRadius: Radius.medium,
     padding: 3,
   },
   segment: {
     flex: 1,
     alignItems: 'center',
     paddingVertical: Spacing.two,
-    borderRadius: 8,
+    borderRadius: Radius.small + 2,
+  },
+  pressed: {
+    opacity: 0.7,
   },
   list: {
     padding: Spacing.three,
     gap: Spacing.three,
-  },
-  headerRow: {
-    flexDirection: 'row',
   },
   row: {
     flexDirection: 'row',
@@ -173,10 +193,10 @@ const styles = StyleSheet.create({
   thumb: {
     width: 64,
     height: 80,
-    borderRadius: 8,
+    borderRadius: Radius.small,
   },
   tripCard: {
-    borderRadius: 8,
+    borderRadius: Radius.medium,
     padding: Spacing.three,
     gap: Spacing.one,
   },

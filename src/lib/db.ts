@@ -21,6 +21,8 @@ export type Item = {
 export type ItemWithStats = Item & {
   wearCount: number;
   lastWorn: string | null;
+  // The item's tag values separated by spaces, for search.
+  tagText: string | null;
 };
 
 export type ItemInput = Pick<
@@ -30,7 +32,14 @@ export type ItemInput = Pick<
   tags: Tag[];
 };
 
-const SCHEMA_VERSION = 4;
+// Applies one schema upgrade and records its version in the same transaction,
+// so an upgrade interrupted by a crash is rolled back and simply runs again.
+async function upgrade(db: SQLiteDatabase, version: number, sql: string) {
+  await db.withTransactionAsync(async () => {
+    await db.execAsync(sql);
+    await db.execAsync(`PRAGMA user_version = ${version}`);
+  });
+}
 
 // Runs once when the app opens. Each block upgrades the schema by one version,
 // so existing users keep their data when new tables or columns are added.
@@ -40,7 +49,10 @@ export async function migrate(db: SQLiteDatabase) {
   let version = row?.user_version ?? 0;
 
   if (version < 1) {
-    await db.execAsync(`
+    await upgrade(
+      db,
+      1,
+      `
       CREATE TABLE items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
@@ -56,14 +68,18 @@ export async function migrate(db: SQLiteDatabase) {
         worn_on TEXT NOT NULL
       );
       CREATE INDEX wears_item_id ON wears(item_id);
-    `);
+    `,
+    );
     version = 1;
   }
 
   if (version < 2) {
     // An outfit wear logs one row in outfit_wears plus one row in wears per item,
     // linked by outfit_wear_id so undoing the outfit wear removes the item wears too.
-    await db.execAsync(`
+    await upgrade(
+      db,
+      2,
+      `
       CREATE TABLE outfits (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
@@ -84,7 +100,8 @@ export async function migrate(db: SQLiteDatabase) {
       CREATE INDEX outfit_wears_outfit_id ON outfit_wears(outfit_id);
       ALTER TABLE wears ADD COLUMN outfit_wear_id INTEGER REFERENCES outfit_wears(id) ON DELETE CASCADE;
       CREATE INDEX wears_worn_on ON wears(worn_on);
-    `);
+    `,
+    );
     version = 2;
   }
 
@@ -92,10 +109,14 @@ export async function migrate(db: SQLiteDatabase) {
     // Makes photo optional (items can be added by hand), adds brand and barcode,
     // and moves the old free-text color into the new tags table. SQLite can't
     // change a column's NOT NULL, so the items table is rebuilt. Foreign keys are
-    // switched off during the rebuild so dropping the old table doesn't cascade.
+    // switched off during the rebuild so dropping the old table doesn't cascade
+    // (SQLite ignores that switch inside a transaction, so it wraps the upgrade).
     await db.execAsync('PRAGMA foreign_keys = OFF');
-    await db.withTransactionAsync(async () => {
-      await db.execAsync(`
+    try {
+      await upgrade(
+        db,
+        3,
+        `
         CREATE TABLE items_new (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           name TEXT NOT NULL,
@@ -119,14 +140,19 @@ export async function migrate(db: SQLiteDatabase) {
         DROP TABLE items;
         ALTER TABLE items_new RENAME TO items;
         CREATE INDEX item_tags_value ON item_tags(tag_group, value);
-      `);
-    });
-    await db.execAsync('PRAGMA foreign_keys = ON');
+      `,
+      );
+    } finally {
+      await db.execAsync('PRAGMA foreign_keys = ON');
+    }
     version = 3;
   }
 
   if (version < 4) {
-    await db.execAsync(`
+    await upgrade(
+      db,
+      4,
+      `
       CREATE TABLE plans (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         planned_on TEXT NOT NULL,
@@ -169,11 +195,10 @@ export async function migrate(db: SQLiteDatabase) {
       ALTER TABLE outfit_items ADD COLUMN x REAL;
       ALTER TABLE outfit_items ADD COLUMN y REAL;
       ALTER TABLE outfit_items ADD COLUMN scale REAL;
-    `);
+    `,
+    );
     version = 4;
   }
-
-  await db.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION}`);
 }
 
 const itemWithStatsQuery = `
@@ -187,7 +212,8 @@ const itemWithStatsQuery = `
     items.barcode,
     items.created_at AS createdAt,
     COUNT(wears.id) AS wearCount,
-    MAX(wears.worn_on) AS lastWorn
+    MAX(wears.worn_on) AS lastWorn,
+    (SELECT group_concat(value, ' ') FROM item_tags WHERE item_id = items.id) AS tagText
   FROM items
   LEFT JOIN wears ON wears.item_id = items.id
 `;
@@ -230,20 +256,25 @@ async function replaceTags(db: SQLiteDatabase, itemId: number, tags: Tag[]) {
   }
 }
 
+// Inserts an item and its tags. Call inside a transaction.
+export async function insertItem(db: SQLiteDatabase, item: ItemInput) {
+  const result = await db.runAsync(
+    'INSERT INTO items (name, category, brand, price, photo, barcode) VALUES (?, ?, ?, ?, ?, ?)',
+    item.name,
+    item.category,
+    item.brand,
+    item.price,
+    item.photo,
+    item.barcode,
+  );
+  await replaceTags(db, result.lastInsertRowId, item.tags);
+  return result.lastInsertRowId;
+}
+
 export async function addItem(db: SQLiteDatabase, item: ItemInput) {
   let itemId = 0;
   await db.withTransactionAsync(async () => {
-    const result = await db.runAsync(
-      'INSERT INTO items (name, category, brand, price, photo, barcode) VALUES (?, ?, ?, ?, ?, ?)',
-      item.name,
-      item.category,
-      item.brand,
-      item.price,
-      item.photo,
-      item.barcode,
-    );
-    itemId = result.lastInsertRowId;
-    await replaceTags(db, itemId, item.tags);
+    itemId = await insertItem(db, item);
   });
   return itemId;
 }
@@ -276,10 +307,16 @@ export async function logWear(db: SQLiteDatabase, itemId: number, wornOn = today
   await db.runAsync('INSERT INTO wears (item_id, worn_on) VALUES (?, ?)', itemId, wornOn);
 }
 
-export async function undoLastWear(db: SQLiteDatabase, itemId: number) {
+// Removes the item's wear on `wornOn`, preferring one logged on its own over
+// one that came from an outfit.
+export async function undoWear(db: SQLiteDatabase, itemId: number, wornOn = today()) {
   await db.runAsync(
-    'DELETE FROM wears WHERE id = (SELECT id FROM wears WHERE item_id = ? ORDER BY worn_on DESC, id DESC LIMIT 1)',
+    `DELETE FROM wears WHERE id = (
+       SELECT id FROM wears WHERE item_id = ? AND worn_on = ?
+       ORDER BY outfit_wear_id IS NULL DESC, id DESC LIMIT 1
+     )`,
     itemId,
+    wornOn,
   );
 }
 
@@ -372,6 +409,32 @@ export async function addOutfit(db: SQLiteDatabase, name: string, itemIds: numbe
   return outfitId;
 }
 
+// Renames an outfit and sets its items, in order. Items that stay keep their board position.
+export async function updateOutfit(
+  db: SQLiteDatabase,
+  outfitId: number,
+  name: string,
+  itemIds: number[],
+) {
+  await db.withTransactionAsync(async () => {
+    await db.runAsync('UPDATE outfits SET name = ? WHERE id = ?', name, outfitId);
+    await db.runAsync(
+      `DELETE FROM outfit_items WHERE outfit_id = ? AND item_id NOT IN (SELECT value FROM json_each(?))`,
+      outfitId,
+      JSON.stringify(itemIds),
+    );
+    for (const [position, itemId] of itemIds.entries()) {
+      await db.runAsync(
+        `INSERT INTO outfit_items (outfit_id, item_id, position) VALUES (?, ?, ?)
+         ON CONFLICT (outfit_id, item_id) DO UPDATE SET position = excluded.position`,
+        outfitId,
+        itemId,
+        position,
+      );
+    }
+  });
+}
+
 export async function deleteOutfit(db: SQLiteDatabase, id: number) {
   await db.runAsync('DELETE FROM outfits WHERE id = ?', id);
 }
@@ -398,9 +461,13 @@ export async function logOutfitWear(db: SQLiteDatabase, outfitId: number, wornOn
   });
 }
 
-export async function undoLastOutfitWear(db: SQLiteDatabase, outfitId: number) {
+// Removes the outfit's wear on `wornOn`; its item wears go with it (see logOutfitWear).
+export async function undoOutfitWear(db: SQLiteDatabase, outfitId: number, wornOn = today()) {
   await db.runAsync(
-    'DELETE FROM outfit_wears WHERE id = (SELECT id FROM outfit_wears WHERE outfit_id = ? ORDER BY worn_on DESC, id DESC LIMIT 1)',
+    `DELETE FROM outfit_wears WHERE id = (
+       SELECT id FROM outfit_wears WHERE outfit_id = ? AND worn_on = ? ORDER BY id DESC LIMIT 1
+     )`,
     outfitId,
+    wornOn,
   );
 }

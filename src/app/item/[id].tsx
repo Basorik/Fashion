@@ -3,13 +3,17 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
+import { HeaderTextButton } from '@/components/add-button';
+import { Button } from '@/components/button';
+import { Chip } from '@/components/chip';
 import { ItemPhoto } from '@/components/item-photo';
 import { Stat } from '@/components/stat';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import type { Tag } from '@/constants/tags';
-import { Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { useBusy } from '@/hooks/use-busy';
+import { formatRelativeDay } from '@/lib/dates';
 import {
   deleteItem,
   getItem,
@@ -17,19 +21,20 @@ import {
   listWornWith,
   logWear,
   today,
-  undoLastWear,
+  undoWear,
   type ItemWithStats,
 } from '@/lib/db';
+import { formatPrice } from '@/lib/money';
 import { deletePhoto } from '@/lib/photos';
 
 export default function ItemScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const itemId = Number(id);
   const db = useSQLiteContext();
-  const theme = useTheme();
   const [item, setItem] = useState<ItemWithStats | null>(null);
   const [tags, setTags] = useState<Tag[]>([]);
   const [wornWith, setWornWith] = useState<Awaited<ReturnType<typeof listWornWith>>>([]);
+  const [busy, run] = useBusy();
 
   const load = useCallback(() => {
     getItem(db, itemId).then(setItem);
@@ -44,18 +49,17 @@ export default function ItemScreen() {
   }
 
   const current = item;
-  const woreToday = current.lastWorn === today();
+  const now = today();
+  const woreToday = current.lastWorn === now;
   const costPerWear =
     current.price !== null && current.wearCount > 0 ? current.price / current.wearCount : null;
 
-  async function wear() {
-    await logWear(db, current.id);
-    load();
-  }
-
-  async function undo() {
-    await undoLastWear(db, current.id);
-    load();
+  function toggleWear() {
+    run(async () => {
+      if (woreToday) await undoWear(db, current.id);
+      else await logWear(db, current.id);
+      load();
+    });
   }
 
   function confirmDelete() {
@@ -64,11 +68,12 @@ export default function ItemScreen() {
       {
         text: 'Delete',
         style: 'destructive',
-        onPress: async () => {
-          await deleteItem(db, current.id);
-          if (current.photo) deletePhoto(current.photo);
-          router.back();
-        },
+        onPress: () =>
+          run(async () => {
+            await deleteItem(db, current.id);
+            if (current.photo) deletePhoto(current.photo);
+            router.back();
+          }),
       },
     ]);
   }
@@ -77,59 +82,63 @@ export default function ItemScreen() {
     <ThemedView style={styles.container}>
       <Stack.Screen
         options={{
-          title: current.name,
+          title: '',
           headerRight: () => (
-            <Link href={{ pathname: '/add-item', params: { id: current.id } }} asChild>
-              <Pressable accessibilityRole="button" hitSlop={12}>
-                <ThemedText>Edit</ThemedText>
-              </Pressable>
-            </Link>
+            <HeaderTextButton
+              href={{ pathname: '/add-item', params: { id: current.id } }}
+              label="Edit"
+            />
           ),
         }}
       />
       <ScrollView contentContainerStyle={styles.content}>
         <ItemPhoto photo={current.photo} name={current.name} style={styles.photo} />
 
-        <View>
-          <ThemedText type="subtitle">{current.name}</ThemedText>
-          <ThemedText themeColor="textSecondary">
+        <View style={styles.heading}>
+          <ThemedText type="caption" themeColor="textSecondary">
             {[current.category, current.brand].filter(Boolean).join(' · ')}
           </ThemedText>
+          <ThemedText type="title">{current.name}</ThemedText>
         </View>
 
         {tags.length > 0 && (
           <View style={styles.tags}>
             {tags.map((tag) => (
-              <View
-                key={`${tag.group}:${tag.value}`}
-                style={[styles.tag, { backgroundColor: theme.backgroundElement }]}>
-                <ThemedText type="small">{tag.value}</ThemedText>
-              </View>
+              <Chip key={`${tag.group}:${tag.value}`} label={tag.value} />
             ))}
           </View>
         )}
 
         <View style={styles.stats}>
           <Stat label="Times worn" value={String(current.wearCount)} />
-          <Stat label="Last worn" value={current.lastWorn ?? 'Never'} />
-          <Stat label="Cost per wear" value={costPerWear === null ? '—' : costPerWear.toFixed(2)} />
+          <Stat
+            label="Last worn"
+            value={current.lastWorn ? formatRelativeDay(current.lastWorn, now) : 'Never'}
+          />
+          <Stat
+            label={costPerWear === null ? 'Price' : 'Cost per wear'}
+            value={
+              costPerWear !== null
+                ? formatPrice(costPerWear)
+                : current.price !== null
+                  ? formatPrice(current.price)
+                  : '—'
+            }
+          />
         </View>
 
-        <Pressable
-          accessibilityRole="button"
-          onPress={woreToday ? undo : wear}
-          style={[
-            styles.button,
-            { backgroundColor: woreToday ? theme.backgroundElement : theme.text },
-          ]}>
-          <ThemedText type="smallBold" style={{ color: woreToday ? theme.text : theme.background }}>
-            {woreToday ? 'Worn today · Undo' : 'I wore this today'}
-          </ThemedText>
-        </Pressable>
+        <View style={styles.row}>
+          <Button
+            label={woreToday ? 'Worn today · Undo' : 'I wore this today'}
+            onPress={toggleWear}
+            busy={busy}
+            variant={woreToday ? 'secondary' : 'primary'}
+          />
+        </View>
 
         {wornWith.length > 0 && (
-          <>
-            <ThemedText type="smallBold" style={styles.sectionTitle}>
+          <View style={styles.section}>
+            <ThemedText type="caption" themeColor="textSecondary">
               Most often worn with
             </ThemedText>
             <View style={styles.pairs}>
@@ -150,14 +159,10 @@ export default function ItemScreen() {
                 </Link>
               ))}
             </View>
-          </>
+          </View>
         )}
 
-        <Pressable accessibilityRole="button" onPress={confirmDelete} style={styles.deleteButton}>
-          <ThemedText type="small" style={styles.deleteText}>
-            Delete item
-          </ThemedText>
-        </Pressable>
+        <Button label="Delete item" onPress={confirmDelete} variant="danger" />
       </ScrollView>
     </ThemedView>
   );
@@ -169,12 +174,16 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: Spacing.three,
+    paddingBottom: Spacing.five,
     gap: Spacing.three,
   },
   photo: {
     width: '100%',
     aspectRatio: 4 / 5,
-    borderRadius: 12,
+    borderRadius: Radius.large,
+  },
+  heading: {
+    gap: Spacing.one,
   },
   stats: {
     flexDirection: 'row',
@@ -185,12 +194,11 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: Spacing.two,
   },
-  tag: {
-    borderRadius: 999,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one,
+  row: {
+    flexDirection: 'row',
   },
-  sectionTitle: {
+  section: {
+    gap: Spacing.two,
     marginTop: Spacing.two,
   },
   pairs: {
@@ -204,19 +212,7 @@ const styles = StyleSheet.create({
   pairPhoto: {
     width: '100%',
     aspectRatio: 4 / 5,
-    borderRadius: 8,
+    borderRadius: Radius.medium,
     marginBottom: Spacing.one,
-  },
-  button: {
-    alignItems: 'center',
-    borderRadius: 8,
-    paddingVertical: Spacing.three,
-  },
-  deleteButton: {
-    alignItems: 'center',
-    paddingVertical: Spacing.two,
-  },
-  deleteText: {
-    color: '#D93036',
   },
 });

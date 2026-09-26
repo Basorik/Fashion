@@ -1,31 +1,33 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 
 import { Button } from '@/components/button';
+import { FooterBar } from '@/components/footer-bar';
 import { ItemSelectGrid } from '@/components/item-select-grid';
 import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
+import { useBusy } from '@/hooks/use-busy';
 import { addTripItems } from '@/lib/trips';
 
 // Adds single items to a packing list.
 export default function PickItemsScreen() {
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
   const db = useSQLiteContext();
-  const theme = useTheme();
   const [selected, setSelected] = useState<number[]>([]);
+  const [adding, run] = useBusy();
 
-  async function add() {
-    await addTripItems(db, Number(tripId), selected);
-    router.back();
+  function add() {
+    run(async () => {
+      await addTripItems(db, Number(tripId), selected);
+      router.back();
+    }, 'Could not add items');
   }
 
   return (
     <ThemedView style={styles.container}>
       <ItemSelectGrid selected={selected} onChange={setSelected} />
-      <View style={[styles.footer, { borderTopColor: theme.backgroundSelected }]}>
+      <FooterBar>
         <Button
           label={
             selected.length
@@ -33,10 +35,11 @@ export default function PickItemsScreen() {
               : 'Add items'
           }
           onPress={add}
+          busy={adding}
           disabled={selected.length === 0}
-          primary
+          variant="primary"
         />
-      </View>
+      </FooterBar>
     </ThemedView>
   );
 }
@@ -44,11 +47,5 @@ export default function PickItemsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  footer: {
-    flexDirection: 'row',
-    paddingHorizontal: Spacing.three,
-    paddingBottom: Spacing.five,
-    borderTopWidth: StyleSheet.hairlineWidth,
   },
 });

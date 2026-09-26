@@ -1,10 +1,11 @@
+import { SymbolView } from 'expo-symbols';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { DayMarks } from '@/lib/calendar';
-import { toDateString } from '@/lib/dates';
+import { formatDay, toDateString } from '@/lib/dates';
 
 const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
@@ -48,7 +49,9 @@ export function MonthGrid({ year, month, selected, today, marks, onSelect }: Pro
             <Pressable
               key={day}
               accessibilityRole="button"
-              accessibilityLabel={day}
+              accessibilityLabel={[formatDay(day), mark?.worn && 'worn', mark?.planned && 'planned']
+                .filter(Boolean)
+                .join(', ')}
               accessibilityState={{ selected: isSelected }}
               onPress={() => onSelect(day)}
               style={styles.cell}>
@@ -56,7 +59,7 @@ export function MonthGrid({ year, month, selected, today, marks, onSelect }: Pro
                 style={[
                   styles.day,
                   isSelected && { backgroundColor: theme.text },
-                  !isSelected && day === today && { borderWidth: 1, borderColor: theme.text },
+                  !isSelected && day === today && { borderWidth: 1.5, borderColor: theme.accent },
                 ]}>
                 <ThemedText
                   type="small"
@@ -65,9 +68,9 @@ export function MonthGrid({ year, month, selected, today, marks, onSelect }: Pro
                 </ThemedText>
               </View>
               <View style={styles.dots}>
-                {mark?.worn && <View style={[styles.dot, { backgroundColor: theme.text }]} />}
+                {mark?.worn && <View style={[styles.dot, { backgroundColor: theme.accent }]} />}
                 {mark?.planned && (
-                  <View style={[styles.dot, { borderColor: theme.text, borderWidth: 1 }]} />
+                  <View style={[styles.dot, { borderColor: theme.accent, borderWidth: 1.5 }]} />
                 )}
               </View>
             </Pressable>
@@ -78,7 +81,55 @@ export function MonthGrid({ year, month, selected, today, marks, onSelect }: Pro
   );
 }
 
+// "September 2026" with previous and next month buttons.
+export function MonthHeader({
+  title,
+  onShift,
+}: {
+  title: string;
+  onShift: (delta: number) => void;
+}) {
+  const theme = useTheme();
+  const arrow = (delta: number) => (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={delta < 0 ? 'Previous month' : 'Next month'}
+      hitSlop={12}
+      onPress={() => onShift(delta)}
+      style={[styles.arrow, { backgroundColor: theme.backgroundElement }]}>
+      <SymbolView
+        name={
+          delta < 0
+            ? { ios: 'chevron.left', android: 'chevron_left', web: 'chevron_left' }
+            : { ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }
+        }
+        tintColor={theme.text}
+        size={16}
+      />
+    </Pressable>
+  );
+  return (
+    <View style={styles.header}>
+      {arrow(-1)}
+      <ThemedText type="subtitle">{title}</ThemedText>
+      {arrow(1)}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  arrow: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   row: {
     flexDirection: 'row',
   },

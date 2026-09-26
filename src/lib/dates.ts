@@ -31,3 +31,12 @@ export function formatDay(value: string) {
 export function formatMonth(year: number, month: number) {
   return new Date(year, month, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
 }
+
+// "Today", "Yesterday", "3 days ago", or a date for anything older than a week.
+export function formatRelativeDay(value: string, today: string) {
+  const days = daysBetween(value, today);
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  if (days > 1 && days < 7) return `${days} days ago`;
+  return formatDay(value);
+}

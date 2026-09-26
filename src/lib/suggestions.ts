@@ -46,7 +46,8 @@ export async function suggestOutfits(
   const wet = weather ? weather.rainChance >= 50 : false;
 
   const scored = outfits
-    .filter((outfit) => byOutfit.has(outfit.id))
+    // Outfits already worn today aren't suggested again.
+    .filter((outfit) => byOutfit.has(outfit.id) && outfit.lastWorn !== now)
     .map((outfit) => {
       const { categories, seasons } = byOutfit.get(outfit.id)!;
       const reasons: string[] = [];
@@ -69,8 +70,13 @@ export async function suggestOutfits(
 
       const daysSince = outfit.lastWorn ? daysBetween(outfit.lastWorn, now) : 30;
       score += Math.min(daysSince, 30) / 10;
-      reasons.push(outfit.lastWorn ? `last worn ${daysSince} days ago` : 'not worn yet');
-      if (daysSince === 0) score -= 10;
+      reasons.push(
+        !outfit.lastWorn
+          ? 'not worn yet'
+          : daysSince === 1
+            ? 'last worn yesterday'
+            : `last worn ${daysSince} days ago`,
+      );
 
       const reason = reasons.join(', ');
       return { outfit, score, reason: reason.charAt(0).toUpperCase() + reason.slice(1) };

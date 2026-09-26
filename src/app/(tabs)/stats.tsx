@@ -8,12 +8,12 @@ import { ItemPhoto } from '@/components/item-photo';
 import { Stat } from '@/components/stat';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { fromDateString } from '@/lib/dates';
+import { formatPrice } from '@/lib/money';
 import { getWardrobeStats, type WardrobeStats } from '@/lib/stats';
 
-const money = (value: number) =>
-  value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+const money = (value: number) => formatPrice(Math.round(value));
 
 export default function StatsScreen() {
   const db = useSQLiteContext();
@@ -31,7 +31,9 @@ export default function StatsScreen() {
     return (
       <ThemedView style={[styles.container, styles.empty]}>
         <ThemedText type="subtitle">No stats yet</ThemedText>
-        <ThemedText themeColor="textSecondary">Add items and log what you wear.</ThemedText>
+        <ThemedText themeColor="textSecondary" style={styles.center}>
+          Add items and log what you wear.
+        </ThemedText>
       </ThemedView>
     );
   }
@@ -42,15 +44,15 @@ export default function StatsScreen() {
         <View style={styles.tiles}>
           <Stat label="Items" value={String(stats.itemCount)} />
           <Stat label="Outfits" value={String(stats.outfitCount)} />
-          <Stat label="Days logged (30d)" value={String(stats.wearsLast30Days)} />
+          <Stat label="Days logged, last 30" value={String(stats.wearsLast30Days)} />
         </View>
         <View style={styles.tiles}>
           <Stat label="Wardrobe value" value={money(stats.totalValue)} />
           <Stat
             label="Avg cost per wear"
-            value={stats.avgCostPerWear === null ? '—' : stats.avgCostPerWear.toFixed(2)}
+            value={stats.avgCostPerWear === null ? '—' : formatPrice(stats.avgCostPerWear)}
           />
-          <Stat label="Worn in last 90d" value={`${Math.round(stats.activeShare * 100)}%`} />
+          <Stat label="Worn in last 90 days" value={`${Math.round(stats.activeShare * 100)}%`} />
         </View>
 
         <Section title="Most worn">
@@ -93,7 +95,9 @@ export default function StatsScreen() {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <View style={styles.section}>
-      <ThemedText type="smallBold">{title}</ThemedText>
+      <ThemedText type="caption" themeColor="textSecondary">
+        {title}
+      </ThemedText>
       {children}
     </View>
   );
@@ -137,6 +141,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.two,
+    paddingHorizontal: Spacing.four,
+  },
+  center: {
+    textAlign: 'center',
   },
   content: {
     padding: Spacing.three,
@@ -160,7 +168,7 @@ const styles = StyleSheet.create({
   itemPhoto: {
     width: 88,
     height: 110,
-    borderRadius: 8,
+    borderRadius: Radius.medium,
     marginBottom: Spacing.one,
   },
 });

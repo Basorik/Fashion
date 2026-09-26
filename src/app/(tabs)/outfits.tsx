@@ -14,7 +14,7 @@ const COLUMNS = 2;
 export default function OutfitsScreen() {
   const db = useSQLiteContext();
   const { width } = useWindowDimensions();
-  const [outfits, setOutfits] = useState<Outfit[]>([]);
+  const [outfits, setOutfits] = useState<Outfit[] | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -27,28 +27,32 @@ export default function OutfitsScreen() {
   return (
     <ThemedView style={styles.container}>
       <FlatList
-        data={outfits}
+        data={outfits ?? []}
         keyExtractor={(outfit) => String(outfit.id)}
         numColumns={COLUMNS}
         contentContainerStyle={styles.grid}
         columnWrapperStyle={styles.gridRow}
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <ThemedText type="subtitle">No outfits yet</ThemedText>
-            <ThemedText themeColor="textSecondary" style={styles.emptyText}>
-              Tap + to put items from your wardrobe together.
-            </ThemedText>
-          </View>
+          outfits === null ? null : (
+            <View style={styles.empty}>
+              <ThemedText type="subtitle">No outfits yet</ThemedText>
+              <ThemedText themeColor="textSecondary" style={styles.emptyText}>
+                Tap + to put items from your wardrobe together.
+              </ThemedText>
+            </View>
+          )
         }
         renderItem={({ item: outfit }) => (
           <Link href={{ pathname: '/outfit/[id]', params: { id: outfit.id } }} asChild>
-            <Pressable accessibilityLabel={outfit.name} style={{ width: tileSize }}>
+            <Pressable
+              accessibilityLabel={`${outfit.name}, worn ${outfit.wearCount} times`}
+              style={({ pressed }) => [{ width: tileSize }, pressed && styles.pressed]}>
               <OutfitCollage photos={outfit.photos} size={tileSize} />
-              <ThemedText type="small" numberOfLines={1} style={styles.name}>
+              <ThemedText type="smallBold" numberOfLines={1} style={styles.name}>
                 {outfit.name}
               </ThemedText>
               <ThemedText type="small" themeColor="textSecondary">
-                Worn {outfit.wearCount}×
+                {outfit.wearCount === 0 ? 'Not worn yet' : `Worn ${outfit.wearCount}×`}
               </ThemedText>
             </Pressable>
           </Link>
@@ -71,16 +75,20 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
   },
   name: {
-    marginTop: Spacing.one,
+    marginTop: Spacing.two,
+  },
+  pressed: {
+    opacity: 0.7,
   },
   empty: {
     flex: 1,
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.four,
     alignItems: 'center',
     justifyContent: 'center',
     paddingTop: Spacing.six,
   },
   emptyText: {
-    marginTop: Spacing.two,
     textAlign: 'center',
   },
 });

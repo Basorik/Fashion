@@ -1,15 +1,19 @@
 import { Link, router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
+import { HeaderTextButton } from '@/components/add-button';
 import { Button } from '@/components/button';
+import { Chip } from '@/components/chip';
 import { ItemPhoto } from '@/components/item-photo';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import type { Tag } from '@/constants/tags';
-import { Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { useBusy } from '@/hooks/use-busy';
+import { formatPrice } from '@/lib/money';
 import { deletePhoto } from '@/lib/photos';
 import {
   deleteWish,
@@ -26,7 +30,7 @@ export default function WishScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const wishId = Number(id);
   const db = useSQLiteContext();
-  const theme = useTheme();
+  const [busy, run] = useBusy();
   const [wish, setWish] = useState<Wish | null>(null);
   const [tags, setTags] = useState<Tag[]>([]);
   const [matches, setMatches] = useState<OwnedItem[]>([]);
@@ -49,9 +53,11 @@ export default function WishScreen() {
   if (!wish) return <ThemedView style={styles.container} />;
   const current = wish;
 
-  async function bought() {
-    const itemId = await markWishBought(db, current, tags);
-    router.replace({ pathname: '/item/[id]', params: { id: itemId } });
+  function bought() {
+    run(async () => {
+      const itemId = await markWishBought(db, current, tags);
+      router.replace({ pathname: '/item/[id]', params: { id: itemId } });
+    }, 'Could not move to wardrobe');
   }
 
   function confirmDelete() {
@@ -60,11 +66,12 @@ export default function WishScreen() {
       {
         text: 'Remove',
         style: 'destructive',
-        onPress: async () => {
-          await deleteWish(db, current.id);
-          if (current.photo) deletePhoto(current.photo);
-          router.back();
-        },
+        onPress: () =>
+          run(async () => {
+            await deleteWish(db, current.id);
+            if (current.photo) deletePhoto(current.photo);
+            router.back();
+          }),
       },
     ]);
   }
@@ -73,50 +80,44 @@ export default function WishScreen() {
     <ThemedView style={styles.container}>
       <Stack.Screen
         options={{
-          title: current.name,
+          title: '',
           headerRight: () => (
-            <Link href={{ pathname: '/add-item', params: { wishId: current.id } }} asChild>
-              <Pressable accessibilityRole="button" hitSlop={12}>
-                <ThemedText>Edit</ThemedText>
-              </Pressable>
-            </Link>
+            <HeaderTextButton
+              href={{ pathname: '/add-item', params: { wishId: current.id } }}
+              label="Edit"
+            />
           ),
         }}
       />
       <ScrollView contentContainerStyle={styles.content}>
         <ItemPhoto photo={current.photo} name={current.name} style={styles.photo} />
-        <View>
-          <ThemedText type="subtitle">{current.name}</ThemedText>
-          <ThemedText themeColor="textSecondary">
-            {[
-              current.category,
-              current.brand,
-              current.price === null ? null : current.price.toFixed(2),
-            ]
-              .filter(Boolean)
-              .join(' · ')}
+        <View style={styles.heading}>
+          <ThemedText type="caption" themeColor="textSecondary">
+            {[current.category, current.brand].filter(Boolean).join(' · ')}
           </ThemedText>
+          <ThemedText type="title">{current.name}</ThemedText>
+          {current.price !== null && (
+            <ThemedText type="subtitle" themeColor="textSecondary">
+              {formatPrice(current.price)}
+            </ThemedText>
+          )}
         </View>
         {tags.length > 0 && (
           <View style={styles.tags}>
             {tags.map((tag) => (
-              <View
-                key={`${tag.group}:${tag.value}`}
-                style={[styles.tag, { backgroundColor: theme.backgroundElement }]}>
-                <ThemedText type="small">{tag.value}</ThemedText>
-              </View>
+              <Chip key={`${tag.group}:${tag.value}`} label={tag.value} />
             ))}
           </View>
         )}
 
         <View style={styles.row}>
-          <Button label="I bought it" onPress={bought} primary />
+          <Button label="I bought it" onPress={bought} busy={busy} variant="primary" />
           {current.url && (
-            <Button label="Open link" onPress={() => Linking.openURL(current.url!)} />
+            <Button label="Open link" onPress={() => WebBrowser.openBrowserAsync(current.url!)} />
           )}
         </View>
 
-        <ThemedText type="smallBold">
+        <ThemedText type="caption" themeColor="textSecondary" style={styles.sectionTitle}>
           Goes with {matches.length} item{matches.length === 1 ? '' : 's'} you own
         </ThemedText>
         {tags.length === 0 && (
@@ -137,11 +138,7 @@ export default function WishScreen() {
           ))}
         </View>
 
-        <Pressable accessibilityRole="button" onPress={confirmDelete} style={styles.delete}>
-          <ThemedText type="small" style={styles.deleteText}>
-            Remove from wishlist
-          </ThemedText>
-        </Pressable>
+        <Button label="Remove from wishlist" onPress={confirmDelete} variant="danger" />
       </ScrollView>
     </ThemedView>
   );
@@ -159,17 +156,18 @@ const styles = StyleSheet.create({
   photo: {
     width: '100%',
     aspectRatio: 4 / 5,
-    borderRadius: 12,
+    borderRadius: Radius.large,
+  },
+  heading: {
+    gap: Spacing.one,
+  },
+  sectionTitle: {
+    marginTop: Spacing.two,
   },
   tags: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.two,
-  },
-  tag: {
-    borderRadius: 999,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one,
   },
   row: {
     flexDirection: 'row',
@@ -186,14 +184,7 @@ const styles = StyleSheet.create({
   matchPhoto: {
     width: '100%',
     aspectRatio: 4 / 5,
-    borderRadius: 8,
+    borderRadius: Radius.medium,
     marginBottom: Spacing.one,
-  },
-  delete: {
-    alignItems: 'center',
-    paddingVertical: Spacing.two,
-  },
-  deleteText: {
-    color: '#D93036',
   },
 });

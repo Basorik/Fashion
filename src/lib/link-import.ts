@@ -1,3 +1,4 @@
+import { parsePrice } from '@/lib/money';
 import type { ProductText } from '@/lib/tag-inference';
 
 export type LinkProduct = ProductText & {
@@ -89,10 +90,10 @@ function asImage(value: unknown): string | null {
   return null;
 }
 
+// Shops write prices as "49.99", "49,99" or "1.299,00"; zero means "no price shown".
 function toPrice(value: unknown): number | null {
-  if (value === null || value === undefined) return null;
-  const number = typeof value === 'number' ? value : Number(String(value).replace(/[^0-9.]/g, ''));
-  return Number.isFinite(number) && number > 0 ? number : null;
+  const number = parsePrice(value);
+  return number && number > 0 ? number : null;
 }
 
 function offerPrice(offers: unknown): number | null {
