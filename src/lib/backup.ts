@@ -1,8 +1,4 @@
-import {
-  backupDatabaseAsync,
-  deserializeDatabaseAsync,
-  type SQLiteDatabase,
-} from 'expo-sqlite';
+import { backupDatabaseAsync, deserializeDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
 import { Directory, File, FileMode, Paths, type FileHandle } from 'expo-file-system';
 import { Unzip, UnzipInflate, Zip, ZipDeflate, ZipPassThrough } from 'fflate';
 

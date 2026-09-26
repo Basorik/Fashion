@@ -22,7 +22,8 @@ import { useTheme } from '@/hooks/use-theme';
 import { lookupBarcode } from '@/lib/barcode';
 import { extractLink, importFromLink } from '@/lib/link-import';
 import { inferCategory, inferTags, mergeTags, type ProductText } from '@/lib/tag-inference';
-import { addItem, getItem, listItemTags, updateItem } from '@/lib/db';
+import { parseDateString } from '@/lib/dates';
+import { addItem, getItem, listItemTags, today, updateItem } from '@/lib/db';
 import { parsePrice } from '@/lib/money';
 import { canRemoveBackground, removeBackground } from '@/lib/photo-ai';
 import { photoColorTags } from '@/lib/photo-colors';
@@ -84,6 +85,9 @@ export default function ItemFormScreen() {
   const [brand, setBrand] = useState('');
   const [price, setPrice] = useState('');
   const [barcode, setBarcode] = useState<string | null>(null);
+  const [notes, setNotes] = useState('');
+  const [store, setStore] = useState('');
+  const [purchasedOn, setPurchasedOn] = useState('');
   const [url, setUrl] = useState('');
   const [importing, setImporting] = useState(false);
   // Product photos from the last link or barcode lookup, to pick the item's photo from.
@@ -109,7 +113,12 @@ export default function ItemFormScreen() {
         setCategory(entry.category);
         setBrand(entry.brand ?? '');
         setPrice(entry.price === null ? '' : String(entry.price));
-        if ('barcode' in entry) setBarcode(entry.barcode);
+        if ('barcode' in entry) {
+          setBarcode(entry.barcode);
+          setNotes(entry.notes ?? '');
+          setStore(entry.store ?? '');
+          setPurchasedOn(entry.purchasedOn ?? '');
+        }
         if ('url' in entry) setUrl(entry.url ?? '');
         setTags(entryTags);
       }
@@ -246,7 +255,9 @@ export default function ItemFormScreen() {
 
   const parsedPrice = price.trim() === '' ? null : parsePrice(price);
   const priceIsValid = price.trim() === '' || parsedPrice !== null;
-  const canSave = loaded && name.trim() !== '' && priceIsValid;
+  const parsedPurchasedOn = purchasedOn.trim() === '' ? null : parseDateString(purchasedOn);
+  const purchasedOnIsValid = purchasedOn.trim() === '' || parsedPurchasedOn !== null;
+  const canSave = loaded && name.trim() !== '' && priceIsValid && purchasedOnIsValid;
 
   function save() {
     if (!canSave) return;
@@ -273,7 +284,13 @@ export default function ItemFormScreen() {
           if (editingId === null) await addWish(db, wish);
           else await updateWish(db, editingId, wish);
         } else {
-          const item = { ...common, barcode };
+          const item = {
+            ...common,
+            barcode,
+            notes: notes.trim() || null,
+            store: store.trim() || null,
+            purchasedOn: parsedPurchasedOn,
+          };
           if (editingId === null) await addItem(db, item);
           else await updateItem(db, editingId, item);
         }
@@ -463,6 +480,44 @@ export default function ItemFormScreen() {
           </ThemedText>
         )}
 
+        {!isWish && (
+          <>
+            <View style={styles.row}>
+              <View style={styles.flex}>
+                <Field label="Bought at">
+                  <TextField value={store} onChangeText={setStore} placeholder="Optional" />
+                </Field>
+              </View>
+              <View style={styles.flex}>
+                <Field label="Bought on">
+                  <TextField
+                    value={purchasedOn}
+                    onChangeText={setPurchasedOn}
+                    placeholder="YYYY-MM-DD"
+                    keyboardType="numbers-and-punctuation"
+                    autoCorrect={false}
+                  />
+                </Field>
+              </View>
+            </View>
+            {!purchasedOnIsValid && (
+              <ThemedText type="small" themeColor="danger">
+                Enter a past date like {today()}
+              </ThemedText>
+            )}
+            <Field label="Notes">
+              <TextField
+                value={notes}
+                onChangeText={setNotes}
+                placeholder="Sizing, care, repairs…"
+                multiline
+                textAlignVertical="top"
+                style={styles.notes}
+              />
+            </Field>
+          </>
+        )}
+
         {barcode && (
           <ThemedText type="small" themeColor="textSecondary">
             Barcode {barcode}
@@ -563,5 +618,8 @@ const styles = StyleSheet.create({
   chips: {
     marginHorizontal: -Spacing.three,
     marginVertical: -Spacing.two,
+  },
+  notes: {
+    minHeight: 96,
   },
 });

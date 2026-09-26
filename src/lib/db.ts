@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import type { Category } from '@/constants/categories';
+import type { ItemStatus } from '@/constants/item-status';
 import type { Tag } from '@/constants/tags';
 import { toDateString } from '@/lib/dates';
 
@@ -15,6 +16,17 @@ export type Item = {
   // Photo file name (see lib/photos). Null for items added by hand without a photo.
   photo: string | null;
   barcode: string | null;
+  notes: string | null;
+  store: string | null;
+  // YYYY-MM-DD, when known.
+  purchasedOn: string | null;
+  // Where the item is when it isn't ready to wear; null means it's in the wardrobe.
+  status: ItemStatus | null;
+  // Who has the item, when its status is "lent".
+  lentTo: string | null;
+  // When the item was put away, e.g. for the season. Archived items keep their
+  // history but are hidden from the wardrobe, suggestions and pickers.
+  archivedAt: string | null;
   createdAt: string;
   // Set when the item has been taken out of the wardrobe (see removeItem).
   removedOn: string | null;
@@ -31,7 +43,7 @@ export type ItemWithStats = Item & {
 
 export type ItemInput = Pick<
   Item,
-  'name' | 'category' | 'brand' | 'price' | 'photo' | 'barcode'
+  'name' | 'category' | 'brand' | 'price' | 'photo' | 'barcode' | 'notes' | 'store' | 'purchasedOn'
 > & {
   tags: Tag[];
 };
@@ -222,6 +234,24 @@ export async function migrate(db: SQLiteDatabase) {
     );
     version = 5;
   }
+
+  if (version < 6) {
+    // Notes and purchase details, where the item is (laundry, dry cleaner, lent),
+    // and archiving, which hides an item for a while (e.g. off-season) without removing it.
+    await upgrade(
+      db,
+      6,
+      `
+      ALTER TABLE items ADD COLUMN notes TEXT;
+      ALTER TABLE items ADD COLUMN store TEXT;
+      ALTER TABLE items ADD COLUMN purchased_on TEXT;
+      ALTER TABLE items ADD COLUMN status TEXT;
+      ALTER TABLE items ADD COLUMN lent_to TEXT;
+      ALTER TABLE items ADD COLUMN archived_at TEXT;
+    `,
+    );
+    version = 6;
+  }
 }
 
 export async function getSetting(db: SQLiteDatabase, key: string) {
@@ -252,6 +282,12 @@ const itemWithStatsQuery = `
     items.price,
     items.photo,
     items.barcode,
+    items.notes,
+    items.store,
+    items.purchased_on AS purchasedOn,
+    items.status,
+    items.lent_to AS lentTo,
+    items.archived_at AS archivedAt,
     items.created_at AS createdAt,
     items.removed_on AS removedOn,
     items.removed_reason AS removedReason,
@@ -314,13 +350,17 @@ async function replaceTags(db: SQLiteDatabase, itemId: number, tags: Tag[]) {
 // Inserts an item and its tags. Call inside a transaction.
 export async function insertItem(db: SQLiteDatabase, item: ItemInput) {
   const result = await db.runAsync(
-    'INSERT INTO items (name, category, brand, price, photo, barcode) VALUES (?, ?, ?, ?, ?, ?)',
+    `INSERT INTO items (name, category, brand, price, photo, barcode, notes, store, purchased_on)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     item.name,
     item.category,
     item.brand,
     item.price,
     item.photo,
     item.barcode,
+    item.notes,
+    item.store,
+    item.purchasedOn,
   );
   await replaceTags(db, result.lastInsertRowId, item.tags);
   return result.lastInsertRowId;
@@ -337,13 +377,18 @@ export async function addItem(db: SQLiteDatabase, item: ItemInput) {
 export async function updateItem(db: SQLiteDatabase, id: number, item: ItemInput) {
   await db.withTransactionAsync(async () => {
     await db.runAsync(
-      'UPDATE items SET name = ?, category = ?, brand = ?, price = ?, photo = ?, barcode = ? WHERE id = ?',
+      `UPDATE items SET name = ?, category = ?, brand = ?, price = ?, photo = ?, barcode = ?,
+         notes = ?, store = ?, purchased_on = ?
+       WHERE id = ?`,
       item.name,
       item.category,
       item.brand,
       item.price,
       item.photo,
       item.barcode,
+      item.notes,
+      item.store,
+      item.purchasedOn,
       id,
     );
     await replaceTags(db, id, item.tags);
@@ -365,6 +410,30 @@ export async function removeItem(
     note,
     id,
   );
+}
+
+// Marks where an item is (laundry, dry cleaner, lent), or back in the wardrobe with null.
+export async function setItemStatus(
+  db: SQLiteDatabase,
+  id: number,
+  status: ItemStatus | null,
+  lentTo: string | null = null,
+) {
+  await db.runAsync(
+    'UPDATE items SET status = ?, lent_to = ? WHERE id = ?',
+    status,
+    status === 'lent' ? lentTo : null,
+    id,
+  );
+}
+
+// Puts every item in the laundry (or at the dry cleaner) back in the wardrobe.
+export async function clearWashStatus(db: SQLiteDatabase) {
+  await db.runAsync(`UPDATE items SET status = NULL WHERE status IN ('laundry', 'cleaner')`);
+}
+
+export async function setItemArchived(db: SQLiteDatabase, id: number, archived: boolean) {
+  await db.runAsync('UPDATE items SET archived_at = ? WHERE id = ?', archived ? today() : null, id);
 }
 
 export async function restoreItem(db: SQLiteDatabase, id: number) {
@@ -398,6 +467,30 @@ export async function undoWear(db: SQLiteDatabase, itemId: number, wornOn = toda
     itemId,
     wornOn,
   );
+}
+
+export async function listWornOn(db: SQLiteDatabase, wornOn: string) {
+  const rows = await db.getAllAsync<{ itemId: number }>(
+    'SELECT DISTINCT item_id AS itemId FROM wears WHERE worn_on = ? ORDER BY id',
+    wornOn,
+  );
+  return rows.map((row) => row.itemId);
+}
+
+// Makes the items worn on `wornOn` exactly `itemIds`: logs the new ones and
+// undoes wears for items taken off the list.
+export async function setWornOn(db: SQLiteDatabase, wornOn: string, itemIds: number[]) {
+  await db.withTransactionAsync(async () => {
+    const before = await listWornOn(db, wornOn);
+    for (const itemId of itemIds) {
+      if (!before.includes(itemId)) await logWear(db, itemId, wornOn);
+    }
+    for (const itemId of before) {
+      if (!itemIds.includes(itemId)) {
+        await db.runAsync('DELETE FROM wears WHERE item_id = ? AND worn_on = ?', itemId, wornOn);
+      }
+    }
+  });
 }
 
 // Items most often worn on the same day as this one, whether logged as an outfit or not.

@@ -28,19 +28,24 @@ export async function suggestOutfits(
       category: string;
       removed: number;
       seasons: string | null;
+      available: number;
     }>(
       `SELECT outfit_items.outfit_id AS outfitId, items.category,
          items.removed_on IS NOT NULL AS removed,
+         items.status IS NULL AND items.archived_at IS NULL AS available,
          (SELECT group_concat(value) FROM item_tags
           WHERE item_id = items.id AND tag_group = 'Season') AS seasons
        FROM outfit_items JOIN items ON items.id = outfit_items.item_id`,
     ),
   ]);
 
+  // Outfits with an item in the wash, lent out or archived can't be worn today.
+  const unavailable = new Set(rows.filter((row) => !row.available).map((row) => row.outfitId));
   const byOutfit = new Map<number, { categories: Set<string>; seasons: Set<string> }>();
   // Outfits with an item that's been removed from the wardrobe can't be worn.
   const incomplete = new Set(rows.filter((row) => row.removed).map((row) => row.outfitId));
   for (const row of rows) {
+    if (unavailable.has(row.outfitId)) continue;
     const entry = byOutfit.get(row.outfitId) ?? { categories: new Set(), seasons: new Set() };
     entry.categories.add(row.category);
     for (const season of row.seasons?.split(',') ?? []) entry.seasons.add(season);

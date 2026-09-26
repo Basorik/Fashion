@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import type { Category } from '@/constants/categories';
+import type { ItemStatus } from '@/constants/item-status';
 
 export type Trip = {
   id: number;
@@ -17,6 +18,8 @@ export type PackingItem = {
   photo: string | null;
   category: Category;
   packed: boolean;
+  status: ItemStatus | null;
+  lentTo: string | null;
 };
 
 const tripQuery = `
@@ -57,7 +60,8 @@ export async function deleteTrip(db: SQLiteDatabase, id: number) {
 
 export async function listPackingItems(db: SQLiteDatabase, tripId: number) {
   const rows = await db.getAllAsync<Omit<PackingItem, 'packed'> & { packed: number }>(
-    `SELECT items.id, items.name, items.photo, items.category, trip_items.packed
+    `SELECT items.id, items.name, items.photo, items.category, trip_items.packed,
+       items.status, items.lent_to AS lentTo
      FROM trip_items JOIN items ON items.id = trip_items.item_id
      WHERE trip_items.trip_id = ?
      ORDER BY items.category, items.name`,
