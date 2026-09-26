@@ -31,7 +31,9 @@ import {
   type ItemWithStats,
 } from '@/lib/db';
 import { formatPrice } from '@/lib/money';
-import { deletePhoto } from '@/lib/photos';
+import { successFeedback, tapFeedback, warningFeedback } from '@/lib/haptics';
+import { deletePhoto, photoUri } from '@/lib/photos';
+import { canShare, shareFile } from '@/lib/share';
 
 export default function ItemScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -67,8 +69,13 @@ export default function ItemScreen() {
 
   function toggleWear() {
     run(async () => {
-      if (woreToday) await undoWear(db, current.id);
-      else await logWear(db, current.id);
+      if (woreToday) {
+        await undoWear(db, current.id);
+        tapFeedback();
+      } else {
+        await logWear(db, current.id);
+        successFeedback();
+      }
       load();
     });
   }
@@ -107,7 +114,21 @@ export default function ItemScreen() {
     .filter(Boolean)
     .join(' ');
 
+  function sharePhoto() {
+    if (!current.photo) return;
+    const photo = current.photo;
+    run(
+      () =>
+        shareFile(photoUri(photo), {
+          mimeType: photoMimeType(photo),
+          dialogTitle: `Share ${current.name}`,
+        }),
+      'Could not share photo',
+    );
+  }
+
   function confirmDelete() {
+    warningFeedback();
     Alert.alert('Delete for good?', `${current.name} and its wear history will be deleted.`, [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -138,6 +159,9 @@ export default function ItemScreen() {
       />
       <ScrollView contentContainerStyle={styles.content}>
         <ItemPhoto photo={current.photo} name={current.name} style={styles.photo} />
+        {canShare && current.photo && (
+          <Button label="Share photo" onPress={sharePhoto} variant="plain" disabled={busy} />
+        )}
 
         <View style={styles.heading}>
           <ThemedText type="caption" themeColor="textSecondary">
@@ -364,3 +388,10 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.one,
   },
 });
+
+function photoMimeType(name: string) {
+  const extension = name.slice(name.lastIndexOf('.') + 1).toLowerCase();
+  if (extension === 'png' || extension === 'webp' || extension === 'heic')
+    return `image/${extension}`;
+  return 'image/jpeg';
+}

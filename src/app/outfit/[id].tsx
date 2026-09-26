@@ -24,6 +24,7 @@ import {
   type ItemWithStats,
   type Outfit,
 } from '@/lib/db';
+import { warningFeedback } from '@/lib/haptics';
 
 export default function OutfitScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -60,6 +61,7 @@ export default function OutfitScreen() {
   }
 
   function confirmDelete() {
+    warningFeedback();
     Alert.alert(
       'Delete outfit?',
       `${current.name} will be removed. Its items stay in your wardrobe.`,

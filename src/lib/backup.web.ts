@@ -170,3 +170,12 @@ export async function applyRestore(db: SQLiteDatabase, pending: PendingRestore) 
     await discardRestore(pending);
   }
 }
+
+// The web has no share sheet for local files (the Send button is hidden there,
+// see lib/share), so a shared backup is simply downloaded.
+export async function shareBackup(
+  db: SQLiteDatabase,
+  onProgress?: (done: number, total: number) => void,
+) {
+  await exportBackup(db, onProgress);
+}

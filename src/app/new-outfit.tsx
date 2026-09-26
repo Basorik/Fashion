@@ -13,6 +13,7 @@ import { Spacing } from '@/constants/theme';
 import { useBusy } from '@/hooks/use-busy';
 import { useDiscardGuard } from '@/hooks/use-discard-guard';
 import { addOutfit, getOutfit, listOutfitItems, updateOutfit } from '@/lib/db';
+import { successFeedback } from '@/lib/haptics';
 
 // Creates an outfit, or edits one (`id`): its name and which items are in it.
 export default function OutfitFormScreen() {
@@ -53,6 +54,7 @@ export default function OutfitFormScreen() {
     run(async () => {
       if (editingId === null) await addOutfit(db, name.trim(), selected);
       else await updateOutfit(db, editingId, name.trim(), selected);
+      successFeedback();
       leave(() => router.back());
     }, 'Could not save outfit');
   }

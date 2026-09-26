@@ -22,6 +22,7 @@ import { useBusy } from '@/hooks/use-busy';
 import { useDiscardGuard } from '@/hooks/use-discard-guard';
 import { useTheme } from '@/hooks/use-theme';
 import { lookupBarcode } from '@/lib/barcode';
+import { successFeedback } from '@/lib/haptics';
 import { extractLink, importFromLink } from '@/lib/link-import';
 import { inferCategory, inferTags, mergeTags, type ProductText } from '@/lib/tag-inference';
 import { parseDateString } from '@/lib/dates';
@@ -332,6 +333,7 @@ export default function ItemFormScreen() {
         throw error;
       }
       if (originalPhoto && originalPhoto !== storedPhoto) deletePhoto(originalPhoto);
+      successFeedback();
       leave(() => router.back());
     }, 'Could not save');
   }
