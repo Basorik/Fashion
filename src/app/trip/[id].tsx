@@ -12,6 +12,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useBusy } from '@/hooks/use-busy';
 import { useTheme } from '@/hooks/use-theme';
 import { formatDay } from '@/lib/dates';
+import { warningFeedback } from '@/lib/haptics';
 import {
   deleteTrip,
   getTrip,
@@ -65,6 +66,7 @@ export default function TripScreen() {
   }
 
   function confirmDelete() {
+    warningFeedback();
     Alert.alert('Delete packing list?', current.name, [
       { text: 'Cancel', style: 'cancel' },
       {

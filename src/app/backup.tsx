@@ -9,11 +9,14 @@ import { ThemedView } from '@/components/themed-view';
 import { Radius, Spacing } from '@/constants/theme';
 import { useBusy } from '@/hooks/use-busy';
 import { useTheme } from '@/hooks/use-theme';
+import { successFeedback, warningFeedback } from '@/lib/haptics';
+import { canShare } from '@/lib/share';
 import {
   applyRestore,
   discardRestore,
   exportBackup,
   readBackup,
+  shareBackup,
   type BackupSummary,
 } from '@/lib/backup';
 
@@ -29,6 +32,7 @@ function describe(summary: BackupSummary) {
 }
 
 function confirm(title: string, message: string, action: string) {
+  warningFeedback();
   return new Promise<boolean>((resolve) => {
     Alert.alert(
       title,
@@ -46,6 +50,7 @@ export default function BackupScreen() {
   const db = useSQLiteContext();
   const theme = useTheme();
   const [exporting, runExport] = useBusy();
+  const [sending, runSend] = useBusy();
   const [restoring, runRestore] = useBusy();
   const [progress, setProgress] = useState<string | null>(null);
 
@@ -56,12 +61,25 @@ export default function BackupScreen() {
           setProgress(total > 0 ? `Adding photos, ${done} of ${total}` : null),
         );
         if (name) {
+          successFeedback();
           Alert.alert('Backup saved', `${name} is in the folder you picked.`);
         }
       } finally {
         setProgress(null);
       }
     }, 'Could not save backup');
+  }
+
+  function sendNow() {
+    runSend(async () => {
+      try {
+        await shareBackup(db, (done, total) =>
+          setProgress(total > 0 ? `Adding photos, ${done} of ${total}` : null),
+        );
+      } finally {
+        setProgress(null);
+      }
+    }, 'Could not send backup');
   }
 
   function restoreNow() {
@@ -90,12 +108,13 @@ export default function BackupScreen() {
       } finally {
         setProgress(null);
       }
+      successFeedback();
       Alert.alert('Wardrobe restored', describe(pending.summary));
       router.back();
     }, 'Could not restore backup');
   }
 
-  const busy = exporting || restoring;
+  const busy = exporting || sending || restoring;
 
   return (
     <ThemedView style={styles.container}>
@@ -105,6 +124,9 @@ export default function BackupScreen() {
           <ThemedText themeColor="textSecondary">
             Save everything in Bella, photos included, as one file. Keep it somewhere safe, like
             your computer or a cloud drive folder, to move to a new phone or recover after a reset.
+            {canShare
+              ? ' Send backup opens the share menu, so it can go straight to Drive, email or a chat.'
+              : ''}
           </ThemedText>
           <View style={styles.row}>
             <Button
@@ -114,6 +136,9 @@ export default function BackupScreen() {
               busy={exporting}
               disabled={busy}
             />
+            {canShare && (
+              <Button label="Send backup" onPress={sendNow} busy={sending} disabled={busy} />
+            )}
           </View>
         </View>
 
@@ -159,6 +184,7 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
+    gap: Spacing.two,
     marginTop: Spacing.two,
   },
   center: {

@@ -14,6 +14,7 @@ import { RemovalReasons } from '@/constants/removal';
 import { Radius, Spacing } from '@/constants/theme';
 import { useBusy } from '@/hooks/use-busy';
 import { deleteItem, getItem, removeItem, type ItemWithStats } from '@/lib/db';
+import { warningFeedback } from '@/lib/haptics';
 import { deletePhoto } from '@/lib/photos';
 
 // Asks why an item is going, then moves it to the removed list (Lists tab).
@@ -41,6 +42,7 @@ export default function RemoveItemScreen() {
   function confirmDelete() {
     if (!item) return;
     const current = item;
+    warningFeedback();
     Alert.alert(
       'Delete for good?',
       `${current.name} and its wear history will be deleted, and it won't appear in your removed items.`,

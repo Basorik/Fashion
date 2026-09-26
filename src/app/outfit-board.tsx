@@ -11,6 +11,7 @@ import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useBusy } from '@/hooks/use-busy';
 import { getBoard, saveBoard, type BoardPiece } from '@/lib/board';
+import { successFeedback } from '@/lib/haptics';
 
 // Arrange an outfit's items on a board: drag to move, pinch to resize, tap to bring forward.
 export default function OutfitBoardScreen() {
@@ -45,6 +46,7 @@ export default function OutfitBoardScreen() {
     if (!pieces) return;
     run(async () => {
       await saveBoard(db, outfitId, pieces);
+      successFeedback();
       router.back();
     }, 'Could not save layout');
   }

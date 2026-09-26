@@ -13,6 +13,7 @@ import { ThemedView } from '@/components/themed-view';
 import type { Tag } from '@/constants/tags';
 import { Radius, Spacing } from '@/constants/theme';
 import { useBusy } from '@/hooks/use-busy';
+import { warningFeedback } from '@/lib/haptics';
 import { formatPrice } from '@/lib/money';
 import { deletePhoto } from '@/lib/photos';
 import {
@@ -61,6 +62,7 @@ export default function WishScreen() {
   }
 
   function confirmDelete() {
+    warningFeedback();
     Alert.alert('Remove from wishlist?', current.name, [
       { text: 'Cancel', style: 'cancel' },
       {

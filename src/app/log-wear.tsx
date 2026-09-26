@@ -13,6 +13,7 @@ import { Spacing } from '@/constants/theme';
 import { useBusy } from '@/hooks/use-busy';
 import { addDays } from '@/lib/dates';
 import { listWornOn, setWornOn, today } from '@/lib/db';
+import { successFeedback } from '@/lib/haptics';
 import {
   formatHour,
   getReminderHour,
@@ -51,6 +52,7 @@ export default function LogWearScreen() {
   function save() {
     run(async () => {
       await setWornOn(db, day, selected);
+      successFeedback();
       router.back();
     }, 'Could not save');
   }

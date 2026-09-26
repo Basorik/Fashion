@@ -15,6 +15,7 @@ import { useBusy } from '@/hooks/use-busy';
 import { useTheme } from '@/hooks/use-theme';
 import { formatDay } from '@/lib/dates';
 import { addOutfit, today, type ItemWithStats } from '@/lib/db';
+import { successFeedback } from '@/lib/haptics';
 import {
   loadShufflePool,
   pickFor,
@@ -125,6 +126,7 @@ export default function ShuffleScreen() {
         outfitName,
         chosen.map((item) => item.id),
       );
+      successFeedback();
       router.replace({ pathname: '/outfit/[id]', params: { id: outfitId } });
     }, 'Could not save outfit');
   }
