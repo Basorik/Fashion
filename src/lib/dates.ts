@@ -40,6 +40,15 @@ export function formatDay(value: string) {
   });
 }
 
+// "12 Mar 2025", for dates that may be in another year.
+export function formatDate(value: string) {
+  return fromDateString(value).toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
 export function formatMonth(year: number, month: number) {
   return new Date(year, month, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
 }

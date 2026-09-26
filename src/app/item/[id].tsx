@@ -15,7 +15,7 @@ import { ItemStatuses, statusLabel, type ItemStatus } from '@/constants/item-sta
 import type { Tag } from '@/constants/tags';
 import { Radius, Spacing } from '@/constants/theme';
 import { useBusy } from '@/hooks/use-busy';
-import { daysBetween, formatDay, formatRelativeDay } from '@/lib/dates';
+import { daysBetween, formatDate, formatRelativeDay } from '@/lib/dates';
 import {
   deleteItem,
   getItem,
@@ -92,7 +92,7 @@ export default function ItemScreen() {
   const bought = [
     current.store && `Bought at ${current.store}`,
     current.purchasedOn &&
-      `${current.store ? 'on' : 'Bought on'} ${formatDay(current.purchasedOn)} (${formatAge(daysBetween(current.purchasedOn, now))})`,
+      `${current.store ? 'on' : 'Bought on'} ${formatDate(current.purchasedOn)} (${formatAge(daysBetween(current.purchasedOn, now))})`,
   ]
     .filter(Boolean)
     .join(' ');
@@ -136,7 +136,7 @@ export default function ItemScreen() {
           <ThemedText type="title">{current.name}</ThemedText>
           {current.archivedAt && (
             <ThemedText type="small" themeColor="textSecondary">
-              {`Archived on ${formatDay(current.archivedAt)}. It's hidden from your wardrobe and suggestions.`}
+              {`Archived on ${formatDate(current.archivedAt)}. It's hidden from your wardrobe and suggestions.`}
             </ThemedText>
           )}
         </View>
