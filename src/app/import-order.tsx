@@ -7,6 +7,7 @@ import { Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { CategoryChips } from '@/components/category-chips';
+import { DateField } from '@/components/date-field';
 import { FooterBar } from '@/components/footer-bar';
 import { TextField } from '@/components/text-field';
 import { ThemedText } from '@/components/themed-text';
@@ -284,25 +285,17 @@ export default function ImportOrderScreen() {
           );
         })}
 
-        <View style={styles.fields}>
-          <View style={styles.flex}>
-            <ThemedText type="caption" themeColor="textSecondary">
-              Bought at
-            </ThemedText>
-            <TextField value={store} onChangeText={setStore} placeholder="Optional" />
-          </View>
-          <View style={styles.flex}>
-            <ThemedText type="caption" themeColor="textSecondary">
-              Bought on
-            </ThemedText>
-            <TextField
-              value={purchasedOn}
-              onChangeText={setPurchasedOn}
-              placeholder="YYYY-MM-DD"
-              keyboardType="numbers-and-punctuation"
-              autoCorrect={false}
-            />
-          </View>
+        <View style={styles.field}>
+          <ThemedText type="caption" themeColor="textSecondary">
+            Bought at
+          </ThemedText>
+          <TextField value={store} onChangeText={setStore} placeholder="Optional" />
+        </View>
+        <View style={styles.field}>
+          <ThemedText type="caption" themeColor="textSecondary">
+            Bought on
+          </ThemedText>
+          <DateField value={purchasedOn} onChange={setPurchasedOn} accessibilityLabel="Bought on" />
         </View>
         {!purchasedOnIsValid && (
           <ThemedText type="small" themeColor="danger">
@@ -399,8 +392,7 @@ const styles = StyleSheet.create({
   chips: {
     marginHorizontal: -Spacing.three,
   },
-  fields: {
-    flexDirection: 'row',
+  field: {
     gap: Spacing.two,
   },
   flex: {
