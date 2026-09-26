@@ -414,6 +414,13 @@ export default function ItemFormScreen() {
               variant="plain"
             />
           )}
+          {!isWish && editingId === null && (
+            <Button
+              label="Import several items from an order email"
+              onPress={() => router.push('/import-order')}
+              variant="plain"
+            />
+          )}
           {lookingUp && (
             <View style={styles.lookup}>
               <ActivityIndicator />

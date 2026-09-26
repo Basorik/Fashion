@@ -68,6 +68,7 @@ export default function RootLayout() {
             screenOptions={{ headerShadowVisible: false, headerBackButtonDisplayMode: 'minimal' }}>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="add-item" options={{ title: 'Add item', presentation: 'modal' }} />
+            <Stack.Screen name="import-order" options={{ title: 'Import an order email' }} />
             <Stack.Screen name="item/[id]" options={{ title: '' }} />
             <Stack.Screen
               name="remove-item"
