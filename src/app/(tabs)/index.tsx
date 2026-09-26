@@ -1,4 +1,4 @@
-import { Link, useFocusEffect } from 'expo-router';
+import { Link, router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
 import {
@@ -27,6 +27,7 @@ import { formatShortDay } from '@/lib/dates';
 import { clearWashStatus, listItems, today, type ItemWithStats } from '@/lib/db';
 import { formatPrice } from '@/lib/money';
 import {
+  matchesSearch,
   matchesShow,
   sortItems,
   WardrobeShows,
@@ -36,16 +37,6 @@ import {
 } from '@/lib/wardrobe-view';
 
 const COLUMNS = 3;
-
-// True when every word typed appears in the item's name, brand or tags.
-function matchesSearch(item: ItemWithStats, query: string) {
-  const haystack = [item.name, item.brand, item.tagText].join(' ').toLowerCase();
-  return query
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean)
-    .every((word) => haystack.includes(word));
-}
 
 export default function WardrobeScreen() {
   const db = useSQLiteContext();
@@ -152,8 +143,18 @@ export default function WardrobeScreen() {
               <ThemedText themeColor="textSecondary" style={styles.center}>
                 {filtered
                   ? 'Try another word, or change the filter.'
-                  : 'Tap + to add an item from a photo, a barcode, a link, or by hand.'}
+                  : 'Add an item from a photo, a barcode, a link, or by hand.'}
               </ThemedText>
+              {!filtered && (
+                <View style={styles.emptyAction}>
+                  <Button
+                    label={category ? `Add ${category.toLowerCase()}` : 'Add your first item'}
+                    onPress={() => router.push('/add-item')}
+                    variant="primary"
+                    grow={false}
+                  />
+                </View>
+              )}
             </View>
           )
         }
@@ -279,5 +280,8 @@ const styles = StyleSheet.create({
   },
   center: {
     textAlign: 'center',
+  },
+  emptyAction: {
+    marginTop: Spacing.two,
   },
 });

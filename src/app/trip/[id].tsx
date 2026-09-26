@@ -41,11 +41,18 @@ export default function TripScreen() {
   if (!trip) return <ThemedView style={styles.container} />;
   const current = trip;
 
+  // Ticks straight away, and puts the list back as it was if saving fails.
   async function toggle(item: PackingItem) {
     setItems((list) =>
       list.map((entry) => (entry.id === item.id ? { ...entry, packed: !entry.packed } : entry)),
     );
-    await setPacked(db, current.id, item.id, !item.packed);
+    try {
+      await setPacked(db, current.id, item.id, !item.packed);
+    } catch (error) {
+      Alert.alert('Could not save', error instanceof Error ? error.message : String(error));
+      load();
+      return;
+    }
     getTrip(db, tripId).then(setTrip);
   }
 
@@ -146,6 +153,11 @@ export default function TripScreen() {
             accessibilityLabel={item.name}
             onPress={() => toggle(item)}
             onLongPress={() => confirmRemove(item)}
+            accessibilityHint="Long-press to remove it from the list"
+            accessibilityActions={[{ name: 'remove', label: 'Remove from list' }]}
+            onAccessibilityAction={(event) => {
+              if (event.nativeEvent.actionName === 'remove') confirmRemove(item);
+            }}
             style={styles.item}>
             <View
               style={[

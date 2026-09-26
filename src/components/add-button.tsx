@@ -32,7 +32,11 @@ export function HeaderTextButton({ href, label }: { href: Href; label: string })
   const theme = useTheme();
   return (
     <Link href={href} asChild>
-      <Pressable accessibilityRole="button" hitSlop={12} style={styles.button}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        hitSlop={12}
+        style={styles.button}>
         <ThemedText style={{ color: theme.accent }}>{label}</ThemedText>
       </Pressable>
     </Link>
