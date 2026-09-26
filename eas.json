@@ -1,0 +1,27 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EAS_NO_FROZEN_LOCKFILE": "1"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "env": {
+        "EAS_NO_FROZEN_LOCKFILE": "1"
+      }
+    },
+    "production": {
+      "autoIncrement": true
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
