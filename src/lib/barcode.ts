@@ -3,7 +3,7 @@ import type { ProductText } from '@/lib/tag-inference';
 export type ProductInfo = ProductText & {
   name: string | null;
   brand: string | null;
-  imageUrl: string | null;
+  images: string[];
 };
 
 type UpcItemDbResponse = {
@@ -37,7 +37,7 @@ export async function lookupBarcode(code: string): Promise<ProductInfo | null> {
       color: product.color?.trim() || null,
       description: product.description ?? null,
       category: product.category ?? null,
-      imageUrl: product.images?.find((url) => url.startsWith('https://')) ?? null,
+      images: (product.images ?? []).filter((url) => url.startsWith('https://')),
     };
   } catch {
     return null;

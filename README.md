@@ -10,7 +10,7 @@ Built with [Expo](https://expo.dev) (React Native + TypeScript) and Expo Router.
 - **Add an item** three ways: from a photo (camera or library), by scanning its barcode, or by hand with just a name. Photo, brand and price are optional.
 - **Tags**: describe items by color, style, season, material and pattern, from presets or your own tags.
 - **Barcode lookup**: scanning a UPC/EAN code looks the product up in [UPCitemdb](https://www.upcitemdb.com)'s free trial API (about 100 lookups a day, no key) and fills in the name, brand, color and product photo when it finds a match. Clothing coverage is patchy, so a miss just leaves the form for you to fill.
-- **Import from a link**: paste a shop's product page link to fill in the name, brand, price and photo (read from the page's JSON-LD or Open Graph tags).
+- **Import from a link**: paste a shop's product page link to fill in the name, brand, price and photo (read from Shopify's product JSON, the page's JSON-LD, Open Graph tags and the page text). Every product photo on the page is offered as a row of thumbnails to pick the item's photo from. The description, labelled details ("Composition: 70% wool", "Colour: Navy", spec tables) and shop tags are parsed into color, material, pattern, style and season tags, skipping linings and counting faux leather as synthetic.
 - **Edit** any item from its page.
 - **Item page**: tap "I wore this today" to log a wear (tap again to undo). Shows times worn, last worn, cost per wear when a price is set, and the items it's most often worn with. Items can be deleted.
 - **Outfits tab**: pick two or more items and save them as a named outfit, shown as a photo collage.
