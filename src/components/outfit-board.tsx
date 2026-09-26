@@ -65,7 +65,7 @@ function StaticPiece({ piece, size }: { piece: BoardPiece; size: number }) {
           transform: [{ scale: piece.scale }],
         },
       ]}>
-      <ItemPhoto photo={piece.photo} name={piece.name} style={styles.photo} />
+      <ItemPhoto photo={piece.photo} name={piece.name} style={styles.photo} bare />
     </View>
   );
 }
@@ -127,7 +127,7 @@ function DraggablePiece({
   return (
     <GestureDetector gesture={Gesture.Simultaneous(pan, pinch, tap)}>
       <Animated.View style={[styles.piece, { width, height }, animatedStyle]}>
-        <ItemPhoto photo={piece.photo} name={piece.name} style={styles.photo} />
+        <ItemPhoto photo={piece.photo} name={piece.name} style={styles.photo} bare />
       </Animated.View>
     </GestureDetector>
   );

@@ -4,7 +4,7 @@ import { StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Radius } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { photoUri } from '@/lib/photos';
+import { isCutout, photoUri } from '@/lib/photos';
 
 // The outfit's first item photos: one fills the tile, two sit side by side,
 // three or four make a 2x2 grid.
@@ -42,14 +42,18 @@ export function OutfitCollage({ photos, size }: { photos: string[]; size: number
       )}
       {shown.length === 3 ? (
         <>
-          <Image source={{ uri: photoUri(shown[0]) }} style={cellSize(0)} contentFit="cover" />
+          <Image
+            source={{ uri: photoUri(shown[0]) }}
+            style={cellSize(0)}
+            contentFit={fit(shown[0])}
+          />
           <View style={{ gap }}>
             {shown.slice(1).map((photo, index) => (
               <Image
                 key={`${photo}-${index}`}
                 source={{ uri: photoUri(photo) }}
                 style={cellSize(index + 1)}
-                contentFit="cover"
+                contentFit={fit(photo)}
               />
             ))}
           </View>
@@ -60,7 +64,7 @@ export function OutfitCollage({ photos, size }: { photos: string[]; size: number
             key={`${photo}-${index}`}
             source={{ uri: photoUri(photo) }}
             style={cellSize(index)}
-            contentFit="cover"
+            contentFit={fit(photo)}
           />
         ))
       )}
@@ -80,3 +84,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 });
+
+// Cut-outs are shown whole; ordinary photos fill their cell.
+function fit(photo: string) {
+  return isCutout(photo) ? 'contain' : 'cover';
+}

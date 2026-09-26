@@ -8,9 +8,11 @@
     "scheme": "bella",
     "userInterfaceStyle": "automatic",
     "ios": {
+      "bundleIdentifier": "com.basorik.bella",
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "package": "com.basorik.bella",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
