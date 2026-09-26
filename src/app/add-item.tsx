@@ -1,19 +1,23 @@
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import { router } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
+import { BarcodeScanner } from '@/components/barcode-scanner';
 import { Button } from '@/components/button';
 import { CategoryChips } from '@/components/category-chips';
+import { TagPicker } from '@/components/tag-picker';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import type { Category } from '@/constants/categories';
+import type { Tag } from '@/constants/tags';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { addItem } from '@/lib/db';
-import { savePhoto } from '@/lib/photos';
+import { lookupBarcode } from '@/lib/barcode';
+import { addItem, getItem, listItemTags, updateItem } from '@/lib/db';
+import { deletePhoto, photoUri, savePhoto } from '@/lib/photos';
 
 const pickerOptions: ImagePicker.ImagePickerOptions = {
   mediaTypes: 'images',
@@ -22,15 +26,47 @@ const pickerOptions: ImagePicker.ImagePickerOptions = {
   quality: 0.8,
 };
 
-export default function AddItemScreen() {
+// A photo is either already stored for this item, or newly picked (a local
+// file or a product image URL) and not saved until the form is saved.
+type PhotoState = { stored: string } | { uri: string } | null;
+
+// Adds a new item, or edits one when opened with an `id` param.
+export default function ItemFormScreen() {
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const editingId = id ? Number(id) : null;
   const db = useSQLiteContext();
   const theme = useTheme();
-  const [photo, setPhoto] = useState<string | null>(null);
+
+  const [loaded, setLoaded] = useState(editingId === null);
+  const [originalPhoto, setOriginalPhoto] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<PhotoState>(null);
   const [name, setName] = useState('');
   const [category, setCategory] = useState<Category>('Tops');
-  const [color, setColor] = useState('');
+  const [brand, setBrand] = useState('');
   const [price, setPrice] = useState('');
+  const [barcode, setBarcode] = useState<string | null>(null);
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [scanning, setScanning] = useState(false);
+  const [lookingUp, setLookingUp] = useState(false);
+  const [lookupMessage, setLookupMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (editingId === null) return;
+    Promise.all([getItem(db, editingId), listItemTags(db, editingId)]).then(([item, itemTags]) => {
+      if (item) {
+        setOriginalPhoto(item.photo);
+        setPhoto(item.photo ? { stored: item.photo } : null);
+        setName(item.name);
+        setCategory(item.category);
+        setBrand(item.brand ?? '');
+        setPrice(item.price === null ? '' : String(item.price));
+        setBarcode(item.barcode);
+        setTags(itemTags);
+      }
+      setLoaded(true);
+    });
+  }, [db, editingId]);
 
   async function takePhoto() {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
@@ -39,30 +75,66 @@ export default function AddItemScreen() {
       return;
     }
     const result = await ImagePicker.launchCameraAsync(pickerOptions);
-    if (!result.canceled) setPhoto(result.assets[0].uri);
+    if (!result.canceled) setPhoto({ uri: result.assets[0].uri });
   }
 
   async function choosePhoto() {
     const result = await ImagePicker.launchImageLibraryAsync(pickerOptions);
-    if (!result.canceled) setPhoto(result.assets[0].uri);
+    if (!result.canceled) setPhoto({ uri: result.assets[0].uri });
+  }
+
+  async function handleScanned(code: string) {
+    setScanning(false);
+    setBarcode(code);
+    setLookingUp(true);
+    setLookupMessage(null);
+    const product = await lookupBarcode(code);
+    setLookingUp(false);
+    if (!product) {
+      setLookupMessage('No product details found for this barcode. Fill them in below.');
+      return;
+    }
+    // Only fill fields the user hasn't typed into yet.
+    if (product.name) setName((current) => current || product.name!);
+    if (product.brand) setBrand((current) => current || product.brand!);
+    if (product.color) {
+      const color = product.color;
+      setTags((current) =>
+        current.some((tag) => tag.group === 'Color') ? current : [...current, { group: 'Color', value: color }]
+      );
+    }
+    if (product.imageUrl) {
+      const imageUrl = product.imageUrl;
+      setPhoto((current) => current ?? { uri: imageUrl });
+    }
+    setLookupMessage('Filled in from the barcode. Check the details before saving.');
   }
 
   const parsedPrice = price.trim() === '' ? null : Number(price.replace(',', '.'));
   const priceIsValid = parsedPrice === null || (Number.isFinite(parsedPrice) && parsedPrice >= 0);
-  const canSave = photo !== null && name.trim() !== '' && priceIsValid && !saving;
+  const canSave = loaded && name.trim() !== '' && priceIsValid && !saving;
 
   async function save() {
-    if (!canSave || photo === null) return;
+    if (!canSave) return;
     setSaving(true);
     try {
-      const storedPhoto = await savePhoto(photo);
-      await addItem(db, {
+      const storedPhoto =
+        photo === null ? null : 'stored' in photo ? photo.stored : await savePhoto(photo.uri);
+      const input = {
         name: name.trim(),
         category,
-        color: color.trim() || null,
+        brand: brand.trim() || null,
         price: parsedPrice,
         photo: storedPhoto,
-      });
+        barcode,
+        tags,
+      };
+      if (editingId === null) {
+        await addItem(db, input);
+      } else {
+        await updateItem(db, editingId, input);
+        if (originalPhoto && originalPhoto !== storedPhoto) deletePhoto(originalPhoto);
+      }
       router.back();
     } catch (error) {
       setSaving(false);
@@ -71,23 +143,44 @@ export default function AddItemScreen() {
   }
 
   const inputStyle = [styles.input, { backgroundColor: theme.backgroundElement, color: theme.text }];
+  const previewUri = photo === null ? null : 'stored' in photo ? photoUri(photo.stored) : photo.uri;
 
   return (
     <ThemedView style={styles.container}>
+      <Stack.Screen options={{ title: editingId === null ? 'Add item' : 'Edit item' }} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        {photo ? (
-          <Image source={{ uri: photo }} style={styles.preview} contentFit="cover" />
+        {previewUri ? (
+          <Image source={{ uri: previewUri }} style={styles.preview} contentFit="cover" />
         ) : (
           <View style={[styles.preview, styles.placeholder, { backgroundColor: theme.backgroundElement }]}>
-            <ThemedText themeColor="textSecondary">Add a photo of the item</ThemedText>
+            <ThemedText themeColor="textSecondary">No photo (optional)</ThemedText>
           </View>
         )}
-        <View style={styles.photoButtons}>
+        <View style={styles.row}>
           <Button label="Take photo" onPress={takePhoto} />
-          <Button label="Choose from library" onPress={choosePhoto} />
+          <Button label="Library" onPress={choosePhoto} />
+          {photo && <Button label="Remove" onPress={() => setPhoto(null)} />}
         </View>
+        <View style={styles.row}>
+          <Button label={barcode ? 'Scan again' : 'Scan barcode'} onPress={() => setScanning(true)} />
+        </View>
+        {lookingUp && (
+          <View style={styles.lookup}>
+            <ActivityIndicator />
+            <ThemedText type="small" themeColor="textSecondary">
+              Looking up barcode {barcode}…
+            </ThemedText>
+          </View>
+        )}
+        {!lookingUp && lookupMessage && (
+          <ThemedText type="small" themeColor="textSecondary">
+            {lookupMessage}
+          </ThemedText>
+        )}
 
-        <ThemedText type="smallBold">Name</ThemedText>
+        <ThemedText type="smallBold" style={styles.label}>
+          Name
+        </ThemedText>
         <TextInput
           value={name}
           onChangeText={setName}
@@ -105,11 +198,14 @@ export default function AddItemScreen() {
           />
         </View>
 
-        <ThemedText type="smallBold">Color (optional)</ThemedText>
+        <ThemedText type="smallBold">Tags</ThemedText>
+        <TagPicker value={tags} onChange={setTags} />
+
+        <ThemedText type="smallBold">Brand (optional)</ThemedText>
         <TextInput
-          value={color}
-          onChangeText={setColor}
-          placeholder="e.g. Navy"
+          value={brand}
+          onChangeText={setBrand}
+          placeholder="e.g. Uniqlo"
           placeholderTextColor={theme.textSecondary}
           style={inputStyle}
         />
@@ -129,8 +225,22 @@ export default function AddItemScreen() {
           </ThemedText>
         )}
 
-        <Button label={saving ? 'Saving…' : 'Save item'} onPress={save} disabled={!canSave} primary />
+        {barcode && (
+          <ThemedText type="small" themeColor="textSecondary">
+            Barcode {barcode}
+          </ThemedText>
+        )}
+
+        <View style={styles.row}>
+          <Button
+            label={saving ? 'Saving…' : editingId === null ? 'Save item' : 'Save changes'}
+            onPress={save}
+            disabled={!canSave}
+            primary
+          />
+        </View>
       </ScrollView>
+      <BarcodeScanner visible={scanning} onScanned={handleScanned} onClose={() => setScanning(false)} />
     </ThemedView>
   );
 }
@@ -141,6 +251,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: Spacing.three,
+    paddingBottom: Spacing.six,
     gap: Spacing.two,
   },
   preview: {
@@ -152,10 +263,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  photoButtons: {
+  row: {
     flexDirection: 'row',
     gap: Spacing.two,
-    marginBottom: Spacing.three,
+  },
+  lookup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  label: {
+    marginTop: Spacing.three,
   },
   input: {
     borderRadius: 8,

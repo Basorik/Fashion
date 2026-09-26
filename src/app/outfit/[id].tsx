@@ -1,15 +1,14 @@
-import { Image } from 'expo-image';
 import { Link, router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/button';
+import { ItemPhoto } from '@/components/item-photo';
 import { Stat } from '@/components/stat';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
 import {
   deleteOutfit,
   getOutfit,
@@ -20,13 +19,11 @@ import {
   type ItemWithStats,
   type Outfit,
 } from '@/lib/db';
-import { photoUri } from '@/lib/photos';
 
 export default function OutfitScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const outfitId = Number(id);
   const db = useSQLiteContext();
-  const theme = useTheme();
   const [outfit, setOutfit] = useState<Outfit | null>(null);
   const [items, setItems] = useState<ItemWithStats[]>([]);
 
@@ -89,11 +86,7 @@ export default function OutfitScreen() {
         {items.map((item) => (
           <Link key={item.id} href={{ pathname: '/item/[id]', params: { id: item.id } }} asChild>
             <Pressable accessibilityLabel={item.name} style={styles.item}>
-              <Image
-                source={{ uri: photoUri(item.photo) }}
-                style={[styles.thumb, { backgroundColor: theme.backgroundElement }]}
-                contentFit="cover"
-              />
+              <ItemPhoto photo={item.photo} name={item.name} style={styles.thumb} />
               <View style={styles.itemText}>
                 <ThemedText numberOfLines={1}>{item.name}</ThemedText>
                 <ThemedText type="small" themeColor="textSecondary">

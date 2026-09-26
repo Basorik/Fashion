@@ -6,13 +6,20 @@ function photosDir() {
   return new Directory(Paths.document, 'photos');
 }
 
+// Copies a picked photo (a local file URI) or downloads a product image
+// (an http(s) URL) into the photos folder, returning the stored file name.
 export async function savePhoto(sourceUri: string): Promise<string> {
   const dir = photosDir();
   dir.create({ idempotent: true, intermediates: true });
-  const extension = new File(sourceUri).extension || '.jpg';
-  const name = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${extension}`;
-  await new File(sourceUri).copy(new File(dir, name));
-  return name;
+  const isRemote = /^https?:/i.test(sourceUri);
+  const extension = (isRemote ? null : new File(sourceUri).extension) || '.jpg';
+  const destination = new File(dir, `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${extension}`);
+  if (isRemote) {
+    await File.downloadFileAsync(sourceUri, destination);
+  } else {
+    await new File(sourceUri).copy(destination);
+  }
+  return destination.name;
 }
 
 export function photoUri(name: string): string {

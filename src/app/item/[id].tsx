@@ -1,24 +1,26 @@
-import { Image } from 'expo-image';
 import { Link, router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
+import { ItemPhoto } from '@/components/item-photo';
 import { Stat } from '@/components/stat';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import type { Tag } from '@/constants/tags';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import {
   deleteItem,
   getItem,
+  listItemTags,
   listWornWith,
   logWear,
   today,
   undoLastWear,
   type ItemWithStats,
 } from '@/lib/db';
-import { deletePhoto, photoUri } from '@/lib/photos';
+import { deletePhoto } from '@/lib/photos';
 
 export default function ItemScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -26,11 +28,13 @@ export default function ItemScreen() {
   const db = useSQLiteContext();
   const theme = useTheme();
   const [item, setItem] = useState<ItemWithStats | null>(null);
+  const [tags, setTags] = useState<Tag[]>([]);
   const [wornWith, setWornWith] = useState<Awaited<ReturnType<typeof listWornWith>>>([]);
 
   const load = useCallback(() => {
     getItem(db, itemId).then(setItem);
     listWornWith(db, itemId).then(setWornWith);
+    listItemTags(db, itemId).then(setTags);
   }, [db, itemId]);
 
   useFocusEffect(load);
@@ -62,7 +66,7 @@ export default function ItemScreen() {
         style: 'destructive',
         onPress: async () => {
           await deleteItem(db, current.id);
-          deletePhoto(current.photo);
+          if (current.photo) deletePhoto(current.photo);
           router.back();
         },
       },
@@ -71,16 +75,39 @@ export default function ItemScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <Stack.Screen options={{ title: current.name }} />
+      <Stack.Screen
+        options={{
+          title: current.name,
+          headerRight: () => (
+            <Link href={{ pathname: '/add-item', params: { id: current.id } }} asChild>
+              <Pressable accessibilityRole="button" hitSlop={12}>
+                <ThemedText>Edit</ThemedText>
+              </Pressable>
+            </Link>
+          ),
+        }}
+      />
       <ScrollView contentContainerStyle={styles.content}>
-        <Image source={{ uri: photoUri(current.photo) }} style={styles.photo} contentFit="cover" />
+        <ItemPhoto photo={current.photo} name={current.name} style={styles.photo} />
 
         <View>
           <ThemedText type="subtitle">{current.name}</ThemedText>
           <ThemedText themeColor="textSecondary">
-            {[current.category, current.color].filter(Boolean).join(' · ')}
+            {[current.category, current.brand].filter(Boolean).join(' · ')}
           </ThemedText>
         </View>
+
+        {tags.length > 0 && (
+          <View style={styles.tags}>
+            {tags.map((tag) => (
+              <View
+                key={`${tag.group}:${tag.value}`}
+                style={[styles.tag, { backgroundColor: theme.backgroundElement }]}>
+                <ThemedText type="small">{tag.value}</ThemedText>
+              </View>
+            ))}
+          </View>
+        )}
 
         <View style={styles.stats}>
           <Stat label="Times worn" value={String(current.wearCount)} />
@@ -109,11 +136,7 @@ export default function ItemScreen() {
                   href={{ pathname: '/item/[id]', params: { id: other.id } }}
                   asChild>
                   <Pressable accessibilityLabel={other.name} style={styles.pair}>
-                    <Image
-                      source={{ uri: photoUri(other.photo) }}
-                      style={[styles.pairPhoto, { backgroundColor: theme.backgroundElement }]}
-                      contentFit="cover"
-                    />
+                    <ItemPhoto photo={other.photo} name={other.name} style={styles.pairPhoto} />
                     <ThemedText type="small" numberOfLines={1}>
                       {other.name}
                     </ThemedText>
@@ -153,6 +176,16 @@ const styles = StyleSheet.create({
   stats: {
     flexDirection: 'row',
     gap: Spacing.two,
+  },
+  tags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
+  },
+  tag: {
+    borderRadius: 999,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.one,
   },
   sectionTitle: {
     marginTop: Spacing.two,

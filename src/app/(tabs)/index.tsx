@@ -1,23 +1,20 @@
-import { Image } from 'expo-image';
 import { Link, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { CategoryChips } from '@/components/category-chips';
+import { ItemPhoto } from '@/components/item-photo';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import type { Category } from '@/constants/categories';
 import { Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
 import { listItems, type ItemWithStats } from '@/lib/db';
-import { photoUri } from '@/lib/photos';
 
 const COLUMNS = 3;
 
 export default function WardrobeScreen() {
   const db = useSQLiteContext();
-  const theme = useTheme();
   const { width } = useWindowDimensions();
   const [category, setCategory] = useState<Category | undefined>();
   const [items, setItems] = useState<ItemWithStats[]>([]);
@@ -48,20 +45,17 @@ export default function WardrobeScreen() {
               {category ? `No ${category.toLowerCase()} yet` : 'Your wardrobe is empty'}
             </ThemedText>
             <ThemedText themeColor="textSecondary" style={styles.emptyText}>
-              Tap + to add an item from a photo.
+              Tap + to add an item from a photo, a barcode, or by hand.
             </ThemedText>
           </View>
         }
         renderItem={({ item }) => (
           <Link href={{ pathname: '/item/[id]', params: { id: item.id } }} asChild>
             <Pressable accessibilityLabel={item.name} style={{ width: tileSize }}>
-              <Image
-                source={{ uri: photoUri(item.photo) }}
-                style={[
-                  styles.tile,
-                  { width: tileSize, height: tileSize * 1.25, backgroundColor: theme.backgroundElement },
-                ]}
-                contentFit="cover"
+              <ItemPhoto
+                photo={item.photo}
+                name={item.name}
+                style={[styles.tile, { width: tileSize, height: tileSize * 1.25 }]}
               />
               <ThemedText type="small" numberOfLines={1}>
                 {item.name}

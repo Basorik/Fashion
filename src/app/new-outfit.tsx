@@ -1,4 +1,3 @@
-import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useState } from 'react';
@@ -14,13 +13,13 @@ import {
 
 import { Button } from '@/components/button';
 import { CategoryChips } from '@/components/category-chips';
+import { ItemPhoto } from '@/components/item-photo';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import type { Category } from '@/constants/categories';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { addOutfit, listItems, type ItemWithStats } from '@/lib/db';
-import { photoUri } from '@/lib/photos';
 
 const COLUMNS = 3;
 
@@ -101,18 +100,17 @@ export default function NewOutfitScreen() {
               accessibilityLabel={item.name}
               onPress={() => toggle(item.id)}
               style={{ width: tileSize }}>
-              <Image
-                source={{ uri: photoUri(item.photo) }}
+              <ItemPhoto
+                photo={item.photo}
+                name={item.name}
                 style={[
                   styles.tile,
                   {
                     width: tileSize,
                     height: tileSize * 1.25,
                     borderColor: isSelected ? theme.text : 'transparent',
-                    backgroundColor: theme.backgroundElement,
                   },
                 ]}
-                contentFit="cover"
               />
               {isSelected && (
                 <View style={[styles.badge, { backgroundColor: theme.text }]}>

@@ -7,7 +7,10 @@ Built with [Expo](https://expo.dev) (React Native + TypeScript) and Expo Router.
 ## What works today
 
 - **Wardrobe grid**: every item you own, filterable by category.
-- **Add an item**: take a photo or pick one from your library, crop it, then give it a name, category, and optional color and price.
+- **Add an item** three ways: from a photo (camera or library), by scanning its barcode, or by hand with just a name. Photo, brand and price are optional.
+- **Tags**: describe items by color, style, season, material and pattern, from presets or your own tags.
+- **Barcode lookup**: scanning a UPC/EAN code looks the product up in [UPCitemdb](https://www.upcitemdb.com)'s free trial API (about 100 lookups a day, no key) and fills in the name, brand, color and product photo when it finds a match. Clothing coverage is patchy, so a miss just leaves the form for you to fill.
+- **Edit** any item from its page.
 - **Item page**: tap "I wore this today" to log a wear (tap again to undo). Shows times worn, last worn, cost per wear when a price is set, and the items it's most often worn with. Items can be deleted.
 - **Outfits tab**: pick two or more items and save them as a named outfit, shown as a photo collage.
 - **Outfit page**: tap "I wore this today" to log a wear for the whole outfit, which also adds a wear to each of its items (items already logged that day aren't counted twice). Shows times worn, last worn and the outfit's items.
@@ -16,7 +19,9 @@ Everything is stored on the device: items, outfits and wear history in SQLite (`
 
 ## Roadmap
 
-- Edit items and outfits after saving them.
+- Fill in tags automatically from the item's photo.
+- Filter the wardrobe by tag.
+- Edit outfits after saving them.
 - A calendar or history view of what you wore.
 - Background removal on item photos; adding items from a product link.
 - Accounts and cloud sync.

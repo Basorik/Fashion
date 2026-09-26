@@ -37,11 +37,19 @@
         "expo-image-picker",
         {
           "photosPermission": "Bella uses your photos so you can add clothing items to your wardrobe.",
-          "cameraPermission": "Bella uses the camera so you can photograph clothing items.",
+          "cameraPermission": "Bella uses the camera to photograph clothing items and scan barcodes.",
           "microphonePermission": false
         }
       ],
-      "expo-sqlite"
+      "expo-sqlite",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Bella uses the camera to photograph clothing items and scan barcodes.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

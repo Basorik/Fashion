@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import type { Category } from '@/constants/categories';
+import type { Tag } from '@/constants/tags';
 
 export const DATABASE_NAME = 'bella.db';
 
@@ -8,9 +9,11 @@ export type Item = {
   id: number;
   name: string;
   category: Category;
-  color: string | null;
+  brand: string | null;
   price: number | null;
-  photo: string;
+  // Photo file name (see lib/photos). Null for items added by hand without a photo.
+  photo: string | null;
+  barcode: string | null;
   createdAt: string;
 };
 
@@ -19,9 +22,11 @@ export type ItemWithStats = Item & {
   lastWorn: string | null;
 };
 
-export type NewItem = Pick<Item, 'name' | 'category' | 'color' | 'price' | 'photo'>;
+export type ItemInput = Pick<Item, 'name' | 'category' | 'brand' | 'price' | 'photo' | 'barcode'> & {
+  tags: Tag[];
+};
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 // Runs once when the app opens. Each block upgrades the schema by one version,
 // so existing users keep their data when new tables or columns are added.
@@ -79,6 +84,43 @@ export async function migrate(db: SQLiteDatabase) {
     version = 2;
   }
 
+  if (version < 3) {
+    // Makes photo optional (items can be added by hand), adds brand and barcode,
+    // and moves the old free-text color into the new tags table. SQLite can't
+    // change a column's NOT NULL, so the items table is rebuilt. Foreign keys are
+    // switched off during the rebuild so dropping the old table doesn't cascade.
+    await db.execAsync('PRAGMA foreign_keys = OFF');
+    await db.withTransactionAsync(async () => {
+      await db.execAsync(`
+        CREATE TABLE items_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          category TEXT NOT NULL,
+          brand TEXT,
+          price REAL,
+          photo TEXT,
+          barcode TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        INSERT INTO items_new (id, name, category, price, photo, created_at)
+          SELECT id, name, category, price, photo, created_at FROM items;
+        CREATE TABLE item_tags (
+          item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+          tag_group TEXT NOT NULL,
+          value TEXT NOT NULL,
+          PRIMARY KEY (item_id, tag_group, value)
+        );
+        INSERT INTO item_tags (item_id, tag_group, value)
+          SELECT id, 'Color', trim(color) FROM items WHERE trim(coalesce(color, '')) != '';
+        DROP TABLE items;
+        ALTER TABLE items_new RENAME TO items;
+        CREATE INDEX item_tags_value ON item_tags(tag_group, value);
+      `);
+    });
+    await db.execAsync('PRAGMA foreign_keys = ON');
+    version = 3;
+  }
+
   await db.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION}`);
 }
 
@@ -87,9 +129,10 @@ const itemWithStatsQuery = `
     items.id,
     items.name,
     items.category,
-    items.color,
+    items.brand,
     items.price,
     items.photo,
+    items.barcode,
     items.created_at AS createdAt,
     COUNT(wears.id) AS wearCount,
     MAX(wears.worn_on) AS lastWorn
@@ -116,16 +159,57 @@ export function getItem(db: SQLiteDatabase, id: number) {
   );
 }
 
-export async function addItem(db: SQLiteDatabase, item: NewItem) {
-  const result = await db.runAsync(
-    'INSERT INTO items (name, category, color, price, photo) VALUES (?, ?, ?, ?, ?)',
-    item.name,
-    item.category,
-    item.color,
-    item.price,
-    item.photo
+export function listItemTags(db: SQLiteDatabase, itemId: number) {
+  return db.getAllAsync<Tag>(
+    'SELECT tag_group AS "group", value FROM item_tags WHERE item_id = ? ORDER BY tag_group, value',
+    itemId
   );
-  return result.lastInsertRowId;
+}
+
+async function replaceTags(db: SQLiteDatabase, itemId: number, tags: Tag[]) {
+  await db.runAsync('DELETE FROM item_tags WHERE item_id = ?', itemId);
+  for (const tag of tags) {
+    await db.runAsync(
+      'INSERT OR IGNORE INTO item_tags (item_id, tag_group, value) VALUES (?, ?, ?)',
+      itemId,
+      tag.group,
+      tag.value
+    );
+  }
+}
+
+export async function addItem(db: SQLiteDatabase, item: ItemInput) {
+  let itemId = 0;
+  await db.withTransactionAsync(async () => {
+    const result = await db.runAsync(
+      'INSERT INTO items (name, category, brand, price, photo, barcode) VALUES (?, ?, ?, ?, ?, ?)',
+      item.name,
+      item.category,
+      item.brand,
+      item.price,
+      item.photo,
+      item.barcode
+    );
+    itemId = result.lastInsertRowId;
+    await replaceTags(db, itemId, item.tags);
+  });
+  return itemId;
+}
+
+export async function updateItem(db: SQLiteDatabase, id: number, item: ItemInput) {
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      'UPDATE items SET name = ?, category = ?, brand = ?, price = ?, photo = ?, barcode = ? WHERE id = ?',
+      item.name,
+      item.category,
+      item.brand,
+      item.price,
+      item.photo,
+      item.barcode,
+      id
+    );
+    await replaceTags(db, id, item.tags);
+  });
 }
 
 export async function deleteItem(db: SQLiteDatabase, id: number) {
@@ -190,7 +274,7 @@ const outfitQuery = `
       SELECT json_group_array(photo) FROM (
         SELECT items.photo FROM outfit_items
         JOIN items ON items.id = outfit_items.item_id
-        WHERE outfit_items.outfit_id = outfits.id
+        WHERE outfit_items.outfit_id = outfits.id AND items.photo IS NOT NULL
         ORDER BY outfit_items.position
         LIMIT 4
       )
