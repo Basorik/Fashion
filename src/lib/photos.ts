@@ -2,7 +2,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 
 // Photos live in the app's document directory. The database stores only the
 // file name, because the absolute document path can change between app updates.
-function photosDir() {
+export function photosDir() {
   return new Directory(Paths.document, 'photos');
 }
 
