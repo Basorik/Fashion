@@ -19,6 +19,8 @@ export const TagGroups = {
   Season: ['Spring', 'Summer', 'Autumn', 'Winter'],
   Material: ['Cotton', 'Denim', 'Wool', 'Linen', 'Leather', 'Silk', 'Synthetic'],
   Pattern: ['Solid', 'Striped', 'Checked', 'Floral', 'Print'],
+  // Letter sizes; numeric and shoe sizes like 32 or 9.5 are added as custom tags.
+  Size: ['XS', 'S', 'M', 'L', 'XL', 'XXL'],
 } as const;
 
 export type TagGroup = keyof typeof TagGroups;

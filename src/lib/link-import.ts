@@ -339,6 +339,12 @@ function shopifyVariant(product: ShopifyProduct, url: string) {
   return product.variants?.find((entry) => entry.id === variantId);
 }
 
+// The size of the variant in the link. Without a variant the size isn't known.
+function shopifySize(product: ShopifyProduct, url: string) {
+  const index = (product.options ?? []).findIndex((option) => /^size$/i.test(optionName(option)));
+  return index === -1 ? null : (shopifyVariant(product, url)?.options?.[index] ?? null);
+}
+
 // Options other than size and color, like "Material: Organic cotton" or "Fit: Relaxed".
 function shopifyDetails(product: ShopifyProduct, url: string) {
   const variant = shopifyVariant(product, url) ?? product.variants?.[0];
@@ -387,6 +393,7 @@ async function shopifyProduct(url: string): Promise<LinkProduct | null> {
           .map((media) => media.src),
       ].filter((image): image is string => !!image),
       color: shopifyColor(product, url),
+      size: shopifySize(product, url),
       category: product.type || null,
       description: product.description ?? null,
       keywords: typeof product.tags === 'string' ? product.tags.split(',') : (product.tags ?? []),
@@ -412,6 +419,7 @@ function merge(primary: LinkProduct | null, fallback: LinkProduct): LinkProduct 
     color: primary?.color ?? fallback.color,
     material: primary?.material ?? fallback.material,
     pattern: primary?.pattern ?? fallback.pattern,
+    size: primary?.size ?? fallback.size,
     category: primary?.category ?? fallback.category,
     // A short meta description is often a cut-down copy of the full one, so keep the longer.
     description: longer(primary?.description, fallback.description),
