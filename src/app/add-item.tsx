@@ -9,6 +9,7 @@ import { BarcodeScanner } from '@/components/barcode-scanner';
 import { Button } from '@/components/button';
 import { CategoryChips } from '@/components/category-chips';
 import { FooterBar } from '@/components/footer-bar';
+import { PhotoChoices } from '@/components/photo-choices';
 import { TagPicker } from '@/components/tag-picker';
 import { TextField } from '@/components/text-field';
 import { ThemedText } from '@/components/themed-text';
@@ -46,6 +47,12 @@ function displayUri(photo: NonNullable<PhotoState>) {
   return 'cutout' in photo ? photo.cutout : photo.uri;
 }
 
+// The picked (not yet stored) photo, or the one a new cut-out was made from.
+function shopPhotoUri(photo: PhotoState) {
+  const source = photo && 'cutout' in photo ? photo.original : photo;
+  return source && 'uri' in source ? source.uri : null;
+}
+
 function showsCutout(photo: PhotoState) {
   return photo !== null && ('cutout' in photo || ('stored' in photo && isCutout(photo.stored)));
 }
@@ -79,6 +86,8 @@ export default function ItemFormScreen() {
   const [barcode, setBarcode] = useState<string | null>(null);
   const [url, setUrl] = useState('');
   const [importing, setImporting] = useState(false);
+  // Product photos from the last link or barcode lookup, to pick the item's photo from.
+  const [photoChoices, setPhotoChoices] = useState<string[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [scanning, setScanning] = useState(false);
   const [lookingUp, setLookingUp] = useState(false);
@@ -110,15 +119,12 @@ export default function ItemFormScreen() {
 
   // Fills empty fields from a looked-up product and adds tags matched from its
   // details. Returns a note like ", with 4 tags" for the status message.
-  function applyProductDetails(
-    product: ProductText & { brand: string | null; imageUrl: string | null },
-  ) {
+  function applyProductDetails(product: ProductText & { brand: string | null; images: string[] }) {
     if (product.name) setName((current) => current || product.name!);
     if (product.brand) setBrand((current) => current || product.brand!);
-    if (product.imageUrl) {
-      const imageUrl = product.imageUrl;
-      setPhoto((current) => current ?? { uri: imageUrl });
-    }
+    const [firstImage] = product.images;
+    if (firstImage) setPhoto((current) => current ?? { uri: firstImage });
+    setPhotoChoices(product.images.length > 1 ? product.images : []);
     const inferredCategory = inferCategory(product);
     if (inferredCategory && !categoryTouched) setCategory(inferredCategory);
     const suggested = inferTags(product);
@@ -149,7 +155,8 @@ export default function ItemFormScreen() {
     if (link) setUrl(link);
     if (product.price !== null) setPrice((current) => current || String(product.price));
     const added = applyProductDetails(product);
-    setLookupMessage(`Filled in from the link${added}. Check the details before saving.`);
+    const pick = product.images.length > 1 ? ' Pick a different photo above if you like.' : '';
+    setLookupMessage(`Filled in from the link${added}. Check the details before saving.${pick}`);
   }
 
   // Replaces the shown photo with a cut-out of the item, unless another photo
@@ -306,6 +313,13 @@ export default function ItemFormScreen() {
             ]}>
             <ThemedText themeColor="textSecondary">No photo yet (optional)</ThemedText>
           </View>
+        )}
+        {photoChoices.length > 0 && (
+          <PhotoChoices
+            uris={photoChoices}
+            selected={shopPhotoUri(photo)}
+            onSelect={(uri) => setPhoto({ uri })}
+          />
         )}
         <View style={styles.row}>
           <Button label="Take photo" onPress={takePhoto} />

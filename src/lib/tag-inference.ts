@@ -8,9 +8,12 @@ export type ProductText = {
   name?: string | null;
   color?: string | null;
   material?: string | null;
+  pattern?: string | null;
   category?: string | null;
   description?: string | null;
   keywords?: string[];
+  // Labelled facts from the page, like "Composition: 100% linen" or "Fit: Relaxed".
+  details?: string[];
 };
 
 type Dictionary = Record<string, string[]>;
@@ -45,9 +48,33 @@ const COLOR_WORDS: Dictionary = {
 };
 
 const MATERIAL_WORDS: Dictionary = {
-  Cotton: ['cotton', 'organic cotton', 'pima', 'poplin', 'oxford cloth', 'jersey', 'chambray'],
+  Cotton: [
+    'cotton',
+    'organic cotton',
+    'pima',
+    'supima',
+    'poplin',
+    'oxford cloth',
+    'jersey',
+    'chambray',
+    'corduroy',
+    'seersucker',
+    'twill',
+    'canvas',
+    'terry',
+  ],
   Denim: ['denim', 'jean', 'jeans'],
-  Wool: ['wool', 'merino', 'cashmere', 'alpaca', 'mohair', 'lambswool', 'tweed'],
+  Wool: [
+    'wool',
+    'merino',
+    'cashmere',
+    'alpaca',
+    'mohair',
+    'lambswool',
+    'tweed',
+    'shetland',
+    'camel hair',
+  ],
   Linen: ['linen', 'flax'],
   Leather: ['leather', 'suede', 'nubuck'],
   Silk: ['silk', 'satin'],
@@ -62,13 +89,28 @@ const MATERIAL_WORDS: Dictionary = {
     'lyocell',
     'modal',
     'recycled polyester',
+    'polyamide',
+    'tencel',
+    'cupro',
+    'acetate',
+    'microfiber',
+    'microfibre',
     'fleece',
   ],
 };
 
 const PATTERN_WORDS: Dictionary = {
-  Striped: ['stripe', 'striped', 'stripes', 'pinstripe', 'breton'],
-  Checked: ['check', 'checked', 'checks', 'plaid', 'gingham', 'tartan', 'houndstooth'],
+  Striped: ['stripe', 'striped', 'stripes', 'pinstripe', 'pinstriped', 'breton'],
+  Checked: [
+    'check',
+    'checked',
+    'checks',
+    'plaid',
+    'gingham',
+    'tartan',
+    'houndstooth',
+    'windowpane',
+  ],
   Floral: ['floral', 'flower', 'flowers', 'botanical'],
   Print: [
     'print',
@@ -82,6 +124,12 @@ const PATTERN_WORDS: Dictionary = {
     'camo',
     'paisley',
     'polka dot',
+    'polka dots',
+    'tie-dye',
+    'tie dye',
+    'zebra',
+    'snake print',
+    'abstract print',
   ],
   Solid: ['solid', 'plain', 'block color', 'block colour'],
 };
@@ -327,11 +375,86 @@ function stripHtml(text: string) {
   return text.replace(/<[^>]+>/g, ' ').replace(/&[a-z#0-9]+;/gi, ' ');
 }
 
+// Pattern words that are safe to read from a long description. "Print", "logo"
+// or "pattern" turn up in all sorts of blurbs ("printed care label"), but a
+// description that says "striped" or "floral" is describing the item.
+const DESCRIPTION_PATTERN_WORDS: Dictionary = {
+  Striped: PATTERN_WORDS.Striped.filter((word) => word !== 'stripe'),
+  Checked: PATTERN_WORDS.Checked.filter((word) => !word.startsWith('check')),
+  Floral: ['floral'],
+  Print: [
+    'animal print',
+    'leopard',
+    'camo',
+    'paisley',
+    'polka dot',
+    'polka dots',
+    'tie-dye',
+    'zebra',
+  ],
+};
+
+// "Faux leather" is plastic, so it counts as synthetic and not as leather.
+const IMITATION = /\b(faux|vegan|pu|imitation)[\s-]+(leather|suede|fur)\b/gi;
+
+// Linings, pocket bags and trims aren't what the item is made of.
+function withoutLinings(text: string) {
+  return text.replace(
+    /\b(lining|pocket(ing| lining| bag)?|trim|facing|interlining|filling|padding)\s*:[^.;\n]*/gi,
+    ' ',
+  );
+}
+
+// The label in a shop tag like "color:black" or "material_wool". Only known
+// labels, so a tag like "summer_sale" keeps its "summer".
+const KEYWORD_LABEL =
+  /^(colou?r|material|fabric|pattern|print|style|fit|season|occasion|category|type)\s*[:_]\s*(?=\S)/i;
+
+type Facts = { color: string; material: string; pattern: string; style: string; season: string };
+
+const FACT_LABELS: [keyof Facts, RegExp][] = [
+  ['color', /^(colou?r|colou?rway|shade)$/i],
+  [
+    'material',
+    /^(materials?|fabrics?|composition|content|fib(re|er)s?|shell|outer( fabric)?|main( fabric)?|body|upper)$/i,
+  ],
+  ['pattern', /^(pattern|print)$/i],
+  ['style', /^(style|fit|occasion)$/i],
+  ['season', /^season$/i],
+];
+
+// Sorts "Label: value" details and "label:value" shop tags (Shopify stores
+// often tag products "color:black" or "material_wool") into the tag groups
+// they describe. Unlabelled details count toward material when they give a
+// fibre composition.
+function labelledFacts(product: ProductText): Facts {
+  const facts: Facts = { color: '', material: '', pattern: '', style: '', season: '' };
+  const add = (field: keyof Facts, value: string) => {
+    facts[field] = `${facts[field]} ${value}`.trim();
+  };
+  const tagged = (product.keywords ?? []).map((keyword) =>
+    keyword.trim().replace(KEYWORD_LABEL, '$1: '),
+  );
+  for (const line of [...(product.details ?? []), ...tagged]) {
+    const [, label, value] = line.match(/^([^:]{2,30}):\s*(.+)$/) ?? [];
+    const field = label && FACT_LABELS.find(([, pattern]) => pattern.test(label.trim()))?.[0];
+    if (field) add(field, value);
+    else if (/\d{1,3}\s*%\s*[a-z]/i.test(line) && !/^(lining|pocket|trim)/i.test(line)) {
+      add('material', line);
+    }
+  }
+  return facts;
+}
+
 // With a composition like "98% cotton, 2% elastane", only fibers making up at
 // least a fifth of the fabric count; trace stretch fibers aren't the material.
-function inferMaterials(product: ProductText, description: string) {
-  const text = [product.material, product.name, description].filter(Boolean).join(' ');
+function inferMaterials(product: ProductText, description: string, facts: Facts) {
+  const raw = withoutLinings(
+    [product.material, facts.material, product.name, description].filter(Boolean).join('\n'),
+  );
+  const text = raw.replace(IMITATION, ' ');
   const found = matches(text, MATERIAL_WORDS);
+  if (text !== raw && !found.includes('Synthetic')) found.push('Synthetic');
   const shares = [...text.matchAll(/(\d{1,3})\s*%\s*([a-z][a-z\s-]*)/gi)];
   if (shares.length === 0) return found;
   return found.filter((material) => {
@@ -353,17 +476,31 @@ export function inferCategory(product: ProductText): Category | null {
 }
 
 // Suggests preset tags from product text. Colors come from the explicit color
-// field when there is one, otherwise the product name; never the description.
+// field or a labelled "Colour:" detail when there is one, otherwise the product
+// name; never the description, which may list every colorway.
 export function inferTags(product: ProductText): Tag[] {
   const description = stripHtml(product.description ?? '');
-  const keywords = product.keywords?.join(' ') ?? '';
+  const facts = labelledFacts(product);
+  // Without their labels, so a "pattern:solid" tag doesn't read as the word "pattern".
+  const keywords =
+    product.keywords?.map((keyword) => keyword.replace(KEYWORD_LABEL, '')).join(' ') ?? '';
   const nameAndKeywords = [product.name, product.category, keywords].filter(Boolean).join(' ');
-  const everything = [nameAndKeywords, product.material, description].filter(Boolean).join(' ');
+  const everything = [nameAndKeywords, product.material, facts.style, facts.season, description]
+    .filter(Boolean)
+    .join('\n');
+  const colorText = product.color || facts.color || product.name || '';
+  const patternText = [product.pattern, facts.pattern, nameAndKeywords].filter(Boolean).join('\n');
 
   const byGroup: [TagGroup, string[]][] = [
-    ['Color', matches(product.color || product.name || '', COLOR_WORDS)],
-    ['Material', inferMaterials(product, description)],
-    ['Pattern', matches(nameAndKeywords, PATTERN_WORDS)],
+    ['Color', matches(colorText, COLOR_WORDS)],
+    ['Material', inferMaterials(product, description, facts)],
+    [
+      'Pattern',
+      unique([
+        ...matches(patternText, PATTERN_WORDS),
+        ...matches(description, DESCRIPTION_PATTERN_WORDS),
+      ]),
+    ],
     ['Style', matches(everything, STYLE_WORDS)],
     ['Season', matches(everything, SEASON_WORDS)],
   ];
@@ -374,7 +511,7 @@ export function inferTags(product: ProductText): Tag[] {
     for (const value of values.slice(0, group === 'Season' ? 2 : 3)) tags.push({ group, value });
   }
   // Denim is both a material and a blue color word; don't tag jeans as blue from "denim" alone.
-  if (!product.color && tags.some((tag) => tag.value === 'Denim')) {
+  if (!product.color && !facts.color && tags.some((tag) => tag.value === 'Denim')) {
     return tags.filter(
       (tag) =>
         !(
@@ -385,6 +522,10 @@ export function inferTags(product: ProductText): Tag[] {
     );
   }
   return tags;
+}
+
+function unique(values: string[]) {
+  return [...new Set(values)];
 }
 
 // Adds suggested tags the item doesn't already have.
