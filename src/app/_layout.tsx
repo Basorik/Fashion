@@ -65,6 +65,7 @@ export default function RootLayout() {
               options={{ title: 'New packing list', presentation: 'modal' }}
             />
             <Stack.Screen name="trip/[id]" options={{ title: '' }} />
+            <Stack.Screen name="backup" options={{ title: 'Backup', presentation: 'modal' }} />
           </Stack>
         </SQLiteProvider>
       </ThemeProvider>

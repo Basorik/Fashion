@@ -2,7 +2,7 @@ import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import { Tabs } from 'expo-router/js-tabs';
 import type { ColorValue } from 'react-native';
 
-import { AddButton } from '@/components/add-button';
+import { AddButton, HeaderTextButton } from '@/components/add-button';
 
 function tabIcon(name: SymbolViewProps['name']) {
   function TabIcon({ color, size }: { color: ColorValue; size: number }) {
@@ -45,6 +45,7 @@ export default function TabsLayout() {
         name="stats"
         options={{
           title: 'Stats',
+          headerRight: () => <HeaderTextButton href="/backup" label="Backup" />,
           tabBarIcon: tabIcon({ ios: 'chart.bar', android: 'bar_chart', web: 'bar_chart' }),
         }}
       />
