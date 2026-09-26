@@ -41,9 +41,9 @@ export default function WishScreen() {
             const candidate = { category: loaded.category, tags: loadedTags };
             setMatches(owned.filter((item) => goesWith(candidate, item)));
           }
-        }
+        },
       );
-    }, [db, wishId])
+    }, [db, wishId]),
   );
 
   if (!wish) return <ThemedView style={styles.container} />;
@@ -88,7 +88,11 @@ export default function WishScreen() {
         <View>
           <ThemedText type="subtitle">{current.name}</ThemedText>
           <ThemedText themeColor="textSecondary">
-            {[current.category, current.brand, current.price === null ? null : current.price.toFixed(2)]
+            {[
+              current.category,
+              current.brand,
+              current.price === null ? null : current.price.toFixed(2),
+            ]
               .filter(Boolean)
               .join(' · ')}
           </ThemedText>
@@ -107,7 +111,9 @@ export default function WishScreen() {
 
         <View style={styles.row}>
           <Button label="I bought it" onPress={bought} primary />
-          {current.url && <Button label="Open link" onPress={() => Linking.openURL(current.url!)} />}
+          {current.url && (
+            <Button label="Open link" onPress={() => Linking.openURL(current.url!)} />
+          )}
         </View>
 
         <ThemedText type="smallBold">

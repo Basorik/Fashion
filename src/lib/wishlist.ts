@@ -32,7 +32,7 @@ export function getWish(db: SQLiteDatabase, id: number) {
 export function listWishTags(db: SQLiteDatabase, wishId: number) {
   return db.getAllAsync<Tag>(
     'SELECT tag_group AS "group", value FROM wish_tags WHERE wish_id = ? ORDER BY tag_group, value',
-    wishId
+    wishId,
   );
 }
 
@@ -43,7 +43,7 @@ async function replaceWishTags(db: SQLiteDatabase, wishId: number, tags: Tag[]) 
       'INSERT OR IGNORE INTO wish_tags (wish_id, tag_group, value) VALUES (?, ?, ?)',
       wishId,
       tag.group,
-      tag.value
+      tag.value,
     );
   }
 }
@@ -57,7 +57,7 @@ export async function addWish(db: SQLiteDatabase, wish: WishInput) {
       wish.brand,
       wish.price,
       wish.url,
-      wish.photo
+      wish.photo,
     );
     await replaceWishTags(db, result.lastInsertRowId, wish.tags);
   });
@@ -73,7 +73,7 @@ export async function updateWish(db: SQLiteDatabase, id: number, wish: WishInput
       wish.price,
       wish.url,
       wish.photo,
-      id
+      id,
     );
     await replaceWishTags(db, id, wish.tags);
   });
@@ -147,7 +147,7 @@ export async function listOwnedWithTags(db: SQLiteDatabase): Promise<OwnedItem[]
   const [items, tags] = await Promise.all([
     db.getAllAsync<Omit<OwnedItem, 'tags'>>('SELECT id, name, photo, category FROM items'),
     db.getAllAsync<Tag & { itemId: number }>(
-      'SELECT item_id AS itemId, tag_group AS "group", value FROM item_tags'
+      'SELECT item_id AS itemId, tag_group AS "group", value FROM item_tags',
     ),
   ]);
   const byItem = new Map<number, Tag[]>();
@@ -165,7 +165,7 @@ export async function listWishesByFit(db: SQLiteDatabase): Promise<WishWithMatch
     listWishes(db),
     listOwnedWithTags(db),
     db.getAllAsync<Tag & { wishId: number }>(
-      'SELECT wish_id AS wishId, tag_group AS "group", value FROM wish_tags'
+      'SELECT wish_id AS wishId, tag_group AS "group", value FROM wish_tags',
     ),
   ]);
   return wishes

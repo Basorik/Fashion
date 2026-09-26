@@ -28,7 +28,7 @@ const tripQuery = `
 
 export function listTrips(db: SQLiteDatabase) {
   return db.getAllAsync<Trip>(
-    `${tripQuery} GROUP BY trips.id ORDER BY trips.start_on IS NULL, trips.start_on DESC, trips.id DESC`
+    `${tripQuery} GROUP BY trips.id ORDER BY trips.start_on IS NULL, trips.start_on DESC, trips.id DESC`,
   );
 }
 
@@ -36,12 +36,17 @@ export function getTrip(db: SQLiteDatabase, id: number) {
   return db.getFirstAsync<Trip>(`${tripQuery} WHERE trips.id = ? GROUP BY trips.id`, id);
 }
 
-export async function addTrip(db: SQLiteDatabase, name: string, startOn: string | null, endOn: string | null) {
+export async function addTrip(
+  db: SQLiteDatabase,
+  name: string,
+  startOn: string | null,
+  endOn: string | null,
+) {
   const result = await db.runAsync(
     'INSERT INTO trips (name, start_on, end_on) VALUES (?, ?, ?)',
     name,
     startOn,
-    endOn
+    endOn,
   );
   return result.lastInsertRowId;
 }
@@ -56,7 +61,7 @@ export async function listPackingItems(db: SQLiteDatabase, tripId: number) {
      FROM trip_items JOIN items ON items.id = trip_items.item_id
      WHERE trip_items.trip_id = ?
      ORDER BY items.category, items.name`,
-    tripId
+    tripId,
   );
   return rows.map((row) => ({ ...row, packed: row.packed === 1 }));
 }
@@ -67,7 +72,7 @@ export async function addTripItems(db: SQLiteDatabase, tripId: number, itemIds: 
       await db.runAsync(
         'INSERT OR IGNORE INTO trip_items (trip_id, item_id) VALUES (?, ?)',
         tripId,
-        itemId
+        itemId,
       );
     }
   });
@@ -79,16 +84,21 @@ export async function addTripOutfit(db: SQLiteDatabase, tripId: number, outfitId
     `INSERT OR IGNORE INTO trip_items (trip_id, item_id)
      SELECT ?, item_id FROM outfit_items WHERE outfit_id = ?`,
     tripId,
-    outfitId
+    outfitId,
   );
 }
 
-export async function setPacked(db: SQLiteDatabase, tripId: number, itemId: number, packed: boolean) {
+export async function setPacked(
+  db: SQLiteDatabase,
+  tripId: number,
+  itemId: number,
+  packed: boolean,
+) {
   await db.runAsync(
     'UPDATE trip_items SET packed = ? WHERE trip_id = ? AND item_id = ?',
     packed ? 1 : 0,
     tripId,
-    itemId
+    itemId,
   );
 }
 

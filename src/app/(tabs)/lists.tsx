@@ -26,7 +26,7 @@ export default function ListsScreen() {
     useCallback(() => {
       listWishesByFit(db).then(setWishes);
       listTrips(db).then(setTrips);
-    }, [db])
+    }, [db]),
   );
 
   const segments: { key: Tab; label: string }[] = [

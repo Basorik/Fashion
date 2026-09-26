@@ -46,10 +46,12 @@ function jsonLdProduct(html: string): JsonLdProduct | null {
     try {
       const parsed = JSON.parse(body) as unknown;
       const nodes = (Array.isArray(parsed) ? parsed : [parsed]).flatMap((node) =>
-        node && typeof node === 'object' && '@graph' in node ? (node as { '@graph': unknown[] })['@graph'] : [node]
+        node && typeof node === 'object' && '@graph' in node
+          ? (node as { '@graph': unknown[] })['@graph']
+          : [node],
       ) as JsonLdProduct[];
       const product = nodes.find((node) =>
-        [node?.['@type']].flat().some((type) => type === 'Product')
+        [node?.['@type']].flat().some((type) => type === 'Product'),
       );
       if (product) return product;
     } catch {
@@ -60,7 +62,8 @@ function jsonLdProduct(html: string): JsonLdProduct | null {
 }
 
 function toPrice(value: unknown) {
-  const number = typeof value === 'number' ? value : Number(String(value ?? '').replace(/[^0-9.]/g, ''));
+  const number =
+    typeof value === 'number' ? value : Number(String(value ?? '').replace(/[^0-9.]/g, ''));
   return Number.isFinite(number) && number > 0 ? number : null;
 }
 

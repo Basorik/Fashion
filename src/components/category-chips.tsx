@@ -17,7 +17,10 @@ export function CategoryChips({ selected, onSelect, allowAll = true }: Props) {
   const options: (Category | undefined)[] = allowAll ? [undefined, ...Categories] : [...Categories];
 
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.row}>
       {options.map((category) => {
         const active = category === selected;
         return (

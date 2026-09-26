@@ -134,7 +134,9 @@ export default function ItemFormScreen() {
     if (product.color) {
       const color = product.color;
       setTags((current) =>
-        current.some((tag) => tag.group === 'Color') ? current : [...current, { group: 'Color', value: color }]
+        current.some((tag) => tag.group === 'Color')
+          ? current
+          : [...current, { group: 'Color', value: color }],
       );
     }
     if (product.imageUrl) {
@@ -179,7 +181,10 @@ export default function ItemFormScreen() {
     }
   }
 
-  const inputStyle = [styles.input, { backgroundColor: theme.backgroundElement, color: theme.text }];
+  const inputStyle = [
+    styles.input,
+    { backgroundColor: theme.backgroundElement, color: theme.text },
+  ];
   const previewUri = photo === null ? null : 'stored' in photo ? photoUri(photo.stored) : photo.uri;
 
   return (
@@ -193,7 +198,12 @@ export default function ItemFormScreen() {
         {previewUri ? (
           <Image source={{ uri: previewUri }} style={styles.preview} contentFit="cover" />
         ) : (
-          <View style={[styles.preview, styles.placeholder, { backgroundColor: theme.backgroundElement }]}>
+          <View
+            style={[
+              styles.preview,
+              styles.placeholder,
+              { backgroundColor: theme.backgroundElement },
+            ]}>
             <ThemedText themeColor="textSecondary">No photo (optional)</ThemedText>
           </View>
         )}
@@ -204,7 +214,10 @@ export default function ItemFormScreen() {
         </View>
         {!isWish && (
           <View style={styles.row}>
-            <Button label={barcode ? 'Scan again' : 'Scan barcode'} onPress={() => setScanning(true)} />
+            <Button
+              label={barcode ? 'Scan again' : 'Scan barcode'}
+              onPress={() => setScanning(true)}
+            />
           </View>
         )}
         <View style={styles.linkRow}>
@@ -219,7 +232,11 @@ export default function ItemFormScreen() {
             style={[inputStyle, styles.linkInput]}
           />
           <View style={styles.linkButton}>
-            <Button label={importing ? '…' : 'Import'} onPress={importLink} disabled={importing || !url.trim()} />
+            <Button
+              label={importing ? '…' : 'Import'}
+              onPress={importLink}
+              disabled={importing || !url.trim()}
+            />
           </View>
         </View>
         {lookingUp && (
@@ -291,14 +308,26 @@ export default function ItemFormScreen() {
 
         <View style={styles.row}>
           <Button
-            label={saving ? 'Saving…' : editingId === null ? (isWish ? 'Add to wishlist' : 'Save item') : 'Save changes'}
+            label={
+              saving
+                ? 'Saving…'
+                : editingId === null
+                  ? isWish
+                    ? 'Add to wishlist'
+                    : 'Save item'
+                  : 'Save changes'
+            }
             onPress={save}
             disabled={!canSave}
             primary
           />
         </View>
       </ScrollView>
-      <BarcodeScanner visible={scanning} onScanned={handleScanned} onClose={() => setScanning(false)} />
+      <BarcodeScanner
+        visible={scanning}
+        onScanned={handleScanned}
+        onClose={() => setScanning(false)}
+      />
     </ThemedView>
   );
 }

@@ -22,7 +22,7 @@ export default function StatsScreen() {
   useFocusEffect(
     useCallback(() => {
       getWardrobeStats(db).then(setStats);
-    }, [db])
+    }, [db]),
   );
 
   if (!stats) return <ThemedView style={styles.container} />;
@@ -101,10 +101,17 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function ItemRow({ items, empty }: { items: WardrobeStats['mostWorn']; empty: string }) {
   if (items.length === 0) {
-    return empty ? <ThemedText type="small" themeColor="textSecondary">{empty}</ThemedText> : null;
+    return empty ? (
+      <ThemedText type="small" themeColor="textSecondary">
+        {empty}
+      </ThemedText>
+    ) : null;
   }
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.items}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.items}>
       {items.map((item) => (
         <Link key={item.id} href={{ pathname: '/item/[id]', params: { id: item.id } }} asChild>
           <Pressable accessibilityLabel={item.name} style={styles.item}>

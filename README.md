@@ -10,10 +10,17 @@ Built with [Expo](https://expo.dev) (React Native + TypeScript) and Expo Router.
 - **Add an item** three ways: from a photo (camera or library), by scanning its barcode, or by hand with just a name. Photo, brand and price are optional.
 - **Tags**: describe items by color, style, season, material and pattern, from presets or your own tags.
 - **Barcode lookup**: scanning a UPC/EAN code looks the product up in [UPCitemdb](https://www.upcitemdb.com)'s free trial API (about 100 lookups a day, no key) and fills in the name, brand, color and product photo when it finds a match. Clothing coverage is patchy, so a miss just leaves the form for you to fill.
+- **Import from a link**: paste a shop's product page link to fill in the name, brand, price and photo (read from the page's JSON-LD or Open Graph tags).
 - **Edit** any item from its page.
 - **Item page**: tap "I wore this today" to log a wear (tap again to undo). Shows times worn, last worn, cost per wear when a price is set, and the items it's most often worn with. Items can be deleted.
 - **Outfits tab**: pick two or more items and save them as a named outfit, shown as a photo collage.
 - **Outfit page**: tap "I wore this today" to log a wear for the whole outfit, which also adds a wear to each of its items (items already logged that day aren't counted twice). Shows times worn, last worn and the outfit's items.
+- **Outfit board**: arrange an outfit's items on a board (drag to move, pinch to resize, tap to bring forward); the layout shows on the outfit page.
+- **Calendar tab**: a month view of what you wore and what you've planned. Log or plan an outfit for any day, and mark a planned outfit as worn.
+- **What to wear today**: the local forecast from [Open-Meteo](https://open-meteo.com) (free, no key) and your saved outfits ranked by season tags, a layer for cold or rain, and how long since you last wore them.
+- **Stats tab**: item and outfit counts, wardrobe value, cost per wear, most and least worn, category and color breakdowns, spending by month added.
+- **Wishlist**: save things you're thinking of buying (from a link or by hand), ranked by how many items you own each would go with, based on category, style, season and color. "I bought it" moves an entry into your wardrobe.
+- **Packing lists**: create a trip with dates, add outfits or single items, and tick them off as you pack.
 
 Everything is stored on the device: items, outfits and wear history in SQLite (`expo-sqlite`), photos in the app's document folder (`expo-file-system`).
 
@@ -22,8 +29,7 @@ Everything is stored on the device: items, outfits and wear history in SQLite (`
 - Fill in tags automatically from the item's photo.
 - Filter the wardrobe by tag.
 - Edit outfits after saving them.
-- A calendar or history view of what you wore.
-- Background removal on item photos; adding items from a product link.
+- Background removal on item photos, and importing items from a screenshot or receipt (these need an image AI service behind a small server).
 - Accounts and cloud sync.
 
 ## Running it
@@ -46,12 +52,17 @@ npm run lint
 
 ```
 src/app/            screens (Expo Router: each file is a route)
-  (tabs)/           the Wardrobe and Outfits tabs
+  (tabs)/           Wardrobe, Outfits, Calendar, Stats and Lists tabs
   add-item.tsx      add-item modal
   item/[id].tsx     item details and wear logging
   new-outfit.tsx    create-outfit modal
   outfit/[id].tsx   outfit details and wear logging
+  outfit-board.tsx  drag-and-drop outfit board
+  wish/[id].tsx     wishlist entry with matching items
+  trip/[id].tsx     packing list
 src/components/     shared UI
-src/lib/db.ts       SQLite schema, migrations and queries
+src/lib/db.ts       SQLite schema, migrations, item and outfit queries
+src/lib/*.ts        calendar, stats, wishlist, trips, board, weather, suggestions,
+                    barcode and link import
 src/lib/photos.ts   saving and loading item photos
 ```

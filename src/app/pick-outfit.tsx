@@ -26,7 +26,7 @@ export default function PickOutfitScreen() {
   useFocusEffect(
     useCallback(() => {
       listOutfits(db).then(setOutfits);
-    }, [db])
+    }, [db]),
   );
 
   async function pick(outfit: Outfit) {

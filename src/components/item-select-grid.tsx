@@ -54,7 +54,9 @@ export function ItemSelectGrid({ selected, onChange, header }: Props) {
       }
       ListEmptyComponent={
         <ThemedText themeColor="textSecondary" style={styles.empty}>
-          {category ? `No ${category.toLowerCase()} in your wardrobe` : 'Add items to your wardrobe first'}
+          {category
+            ? `No ${category.toLowerCase()} in your wardrobe`
+            : 'Add items to your wardrobe first'}
         </ThemedText>
       }
       renderItem={({ item }) => {

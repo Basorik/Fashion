@@ -45,7 +45,10 @@ export default function NewOutfitScreen() {
               onChangeText={setName}
               placeholder="Outfit name, e.g. Friday office"
               placeholderTextColor={theme.textSecondary}
-              style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text }]}
+              style={[
+                styles.input,
+                { backgroundColor: theme.backgroundElement, color: theme.text },
+              ]}
             />
             <ThemedText type="small" themeColor="textSecondary">
               {selected.length === 0
@@ -56,7 +59,12 @@ export default function NewOutfitScreen() {
         }
       />
       <View style={[styles.footer, { borderTopColor: theme.backgroundSelected }]}>
-        <Button label={saving ? 'Saving…' : 'Save outfit'} onPress={save} disabled={!canSave} primary />
+        <Button
+          label={saving ? 'Saving…' : 'Save outfit'}
+          onPress={save}
+          disabled={!canSave}
+          primary
+        />
       </View>
     </ThemedView>
   );

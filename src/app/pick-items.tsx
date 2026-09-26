@@ -27,7 +27,11 @@ export default function PickItemsScreen() {
       <ItemSelectGrid selected={selected} onChange={setSelected} />
       <View style={[styles.footer, { borderTopColor: theme.backgroundSelected }]}>
         <Button
-          label={selected.length ? `Add ${selected.length} item${selected.length === 1 ? '' : 's'}` : 'Add items'}
+          label={
+            selected.length
+              ? `Add ${selected.length} item${selected.length === 1 ? '' : 's'}`
+              : 'Add items'
+          }
           onPress={add}
           disabled={selected.length === 0}
           primary

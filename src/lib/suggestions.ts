@@ -19,7 +19,7 @@ function seasonsFor(high: number): Season[] {
 export async function suggestOutfits(
   db: SQLiteDatabase,
   weather: Weather | null,
-  limit = 3
+  limit = 3,
 ): Promise<Suggestion[]> {
   const [outfits, rows] = await Promise.all([
     listOutfits(db),
@@ -27,7 +27,7 @@ export async function suggestOutfits(
       `SELECT outfit_items.outfit_id AS outfitId, items.category,
          (SELECT group_concat(value) FROM item_tags
           WHERE item_id = items.id AND tag_group = 'Season') AS seasons
-       FROM outfit_items JOIN items ON items.id = outfit_items.item_id`
+       FROM outfit_items JOIN items ON items.id = outfit_items.item_id`,
     ),
   ]);
 

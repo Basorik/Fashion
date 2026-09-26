@@ -118,7 +118,10 @@ export default function ItemScreen() {
         <Pressable
           accessibilityRole="button"
           onPress={woreToday ? undo : wear}
-          style={[styles.button, { backgroundColor: woreToday ? theme.backgroundElement : theme.text }]}>
+          style={[
+            styles.button,
+            { backgroundColor: woreToday ? theme.backgroundElement : theme.text },
+          ]}>
           <ThemedText type="smallBold" style={{ color: woreToday ? theme.text : theme.background }}>
             {woreToday ? 'Worn today · Undo' : 'I wore this today'}
           </ThemedText>

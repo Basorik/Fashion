@@ -1,14 +1,16 @@
 import { Link, router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { ItemPhoto } from '@/components/item-photo';
+import { OutfitBoard } from '@/components/outfit-board';
 import { Stat } from '@/components/stat';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { getBoard, type BoardPiece } from '@/lib/board';
 import {
   deleteOutfit,
   getOutfit,
@@ -26,10 +28,13 @@ export default function OutfitScreen() {
   const db = useSQLiteContext();
   const [outfit, setOutfit] = useState<Outfit | null>(null);
   const [items, setItems] = useState<ItemWithStats[]>([]);
+  const [board, setBoard] = useState<BoardPiece[] | null>(null);
+  const { width } = useWindowDimensions();
 
   const load = useCallback(() => {
     getOutfit(db, outfitId).then(setOutfit);
     listOutfitItems(db, outfitId).then(setItems);
+    getBoard(db, outfitId).then(({ pieces, arranged }) => setBoard(arranged ? pieces : null));
   }, [db, outfitId]);
 
   useFocusEffect(load);
@@ -51,23 +56,29 @@ export default function OutfitScreen() {
   }
 
   function confirmDelete() {
-    Alert.alert('Delete outfit?', `${current.name} will be removed. Its items stay in your wardrobe.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          await deleteOutfit(db, current.id);
-          router.back();
+    Alert.alert(
+      'Delete outfit?',
+      `${current.name} will be removed. Its items stay in your wardrobe.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            await deleteOutfit(db, current.id);
+            router.back();
+          },
         },
-      },
-    ]);
+      ],
+    );
   }
 
   return (
     <ThemedView style={styles.container}>
       <Stack.Screen options={{ title: current.name }} />
       <ScrollView contentContainerStyle={styles.content}>
+        {board && <OutfitBoard pieces={board} size={width - Spacing.three * 2} />}
+
         <View style={styles.stats}>
           <Stat label="Times worn" value={String(current.wearCount)} />
           <Stat label="Last worn" value={current.lastWorn ?? 'Never'} />
@@ -82,6 +93,15 @@ export default function OutfitScreen() {
             primary={!woreToday}
           />
         </View>
+
+        {items.length > 0 && (
+          <View style={styles.row}>
+            <Button
+              label={board ? 'Rearrange board' : 'Arrange on a board'}
+              onPress={() => router.push({ pathname: '/outfit-board', params: { id: current.id } })}
+            />
+          </View>
+        )}
 
         {items.map((item) => (
           <Link key={item.id} href={{ pathname: '/item/[id]', params: { id: item.id } }} asChild>

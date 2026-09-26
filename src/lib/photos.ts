@@ -13,7 +13,10 @@ export async function savePhoto(sourceUri: string): Promise<string> {
   dir.create({ idempotent: true, intermediates: true });
   const isRemote = /^https?:/i.test(sourceUri);
   const extension = (isRemote ? null : new File(sourceUri).extension) || '.jpg';
-  const destination = new File(dir, `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${extension}`);
+  const destination = new File(
+    dir,
+    `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${extension}`,
+  );
   if (isRemote) {
     await File.downloadFileAsync(sourceUri, destination);
   } else {

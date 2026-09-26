@@ -9,7 +9,11 @@ export function OutfitCollage({ photos, size }: { photos: string[]; size: number
   const theme = useTheme();
   const cell = (size - 2) / 2;
   return (
-    <View style={[styles.grid, { width: size, height: size, backgroundColor: theme.backgroundElement }]}>
+    <View
+      style={[
+        styles.grid,
+        { width: size, height: size, backgroundColor: theme.backgroundElement },
+      ]}>
       {photos.slice(0, 4).map((photo) => (
         <Image
           key={photo}

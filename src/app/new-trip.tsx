@@ -17,7 +17,10 @@ export default function NewTripScreen() {
   const db = useSQLiteContext();
   const theme = useTheme();
   const [name, setName] = useState('');
-  const [cursor, setCursor] = useState(() => ({ year: new Date().getFullYear(), month: new Date().getMonth() }));
+  const [cursor, setCursor] = useState(() => ({
+    year: new Date().getFullYear(),
+    month: new Date().getMonth(),
+  }));
   const [start, setStart] = useState<string | null>(null);
   const [end, setEnd] = useState<string | null>(null);
 
@@ -64,7 +67,10 @@ export default function NewTripScreen() {
             : 'Dates (optional): tap the first day, then the last'}
         </ThemedText>
         <View style={styles.monthHeader}>
-          <Pressable accessibilityLabel="Previous month" hitSlop={12} onPress={() => shiftMonth(-1)}>
+          <Pressable
+            accessibilityLabel="Previous month"
+            hitSlop={12}
+            onPress={() => shiftMonth(-1)}>
             <ThemedText type="subtitle">‹</ThemedText>
           </Pressable>
           <ThemedText type="smallBold">{formatMonth(cursor.year, cursor.month)}</ThemedText>
@@ -78,7 +84,9 @@ export default function NewTripScreen() {
           selected={end ?? start ?? ''}
           today={today()}
           marks={Object.fromEntries(
-            [start, end].filter((day): day is string => !!day).map((day) => [day, { worn: false, planned: true }])
+            [start, end]
+              .filter((day): day is string => !!day)
+              .map((day) => [day, { worn: false, planned: true }]),
           )}
           onSelect={selectDay}
         />

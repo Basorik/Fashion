@@ -17,7 +17,11 @@ export function ItemPhoto({ photo, name, style }: Props) {
   return (
     <View style={[styles.frame, { backgroundColor: theme.backgroundElement }, style]}>
       {photo ? (
-        <Image source={{ uri: photoUri(photo) }} style={StyleSheet.absoluteFill} contentFit="cover" />
+        <Image
+          source={{ uri: photoUri(photo) }}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+        />
       ) : (
         <ThemedText type="subtitle" themeColor="textSecondary">
           {name.trim().charAt(0).toUpperCase() || '?'}

@@ -25,7 +25,7 @@ export function TodaySuggestions() {
     useCallback(() => {
       if (weather === undefined) return;
       suggestOutfits(db, weather).then(setSuggestions);
-    }, [db, weather])
+    }, [db, weather]),
   );
 
   return (
@@ -46,7 +46,10 @@ export function TodaySuggestions() {
         </ThemedText>
       )}
       {suggestions.map(({ outfit, reason }) => (
-        <Link key={outfit.id} href={{ pathname: '/outfit/[id]', params: { id: outfit.id } }} asChild>
+        <Link
+          key={outfit.id}
+          href={{ pathname: '/outfit/[id]', params: { id: outfit.id } }}
+          asChild>
           <Pressable accessibilityLabel={outfit.name} style={styles.row}>
             <OutfitCollage photos={outfit.photos} size={56} />
             <View style={styles.text}>

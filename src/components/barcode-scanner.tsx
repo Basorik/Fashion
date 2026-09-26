@@ -51,7 +51,9 @@ export function BarcodeScanner({ visible, onScanned, onClose }: Props) {
           </View>
         )}
         <SafeAreaView style={styles.overlay} pointerEvents="box-none">
-          <ThemedText style={[styles.light, styles.hint]}>Point at the barcode on the tag</ThemedText>
+          <ThemedText style={[styles.light, styles.hint]}>
+            Point at the barcode on the tag
+          </ThemedText>
           <Pressable accessibilityRole="button" onPress={onClose} style={styles.close}>
             <ThemedText type="smallBold" style={styles.light}>
               Cancel

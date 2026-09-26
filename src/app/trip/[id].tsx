@@ -39,7 +39,9 @@ export default function TripScreen() {
   const current = trip;
 
   async function toggle(item: PackingItem) {
-    setItems((list) => list.map((entry) => (entry.id === item.id ? { ...entry, packed: !entry.packed } : entry)));
+    setItems((list) =>
+      list.map((entry) => (entry.id === item.id ? { ...entry, packed: !entry.packed } : entry)),
+    );
     await setPacked(db, current.id, item.id, !item.packed);
     getTrip(db, tripId).then(setTrip);
   }
@@ -76,7 +78,7 @@ export default function TripScreen() {
     items.reduce<Record<string, PackingItem[]>>((groups, item) => {
       (groups[item.category] ??= []).push(item);
       return groups;
-    }, {})
+    }, {}),
   ).map(([title, data]) => ({ title, data }));
 
   return (
@@ -103,12 +105,17 @@ export default function TripScreen() {
               <Button
                 label="Add outfit"
                 onPress={() =>
-                  router.push({ pathname: '/pick-outfit', params: { mode: 'trip', tripId: current.id } })
+                  router.push({
+                    pathname: '/pick-outfit',
+                    params: { mode: 'trip', tripId: current.id },
+                  })
                 }
               />
               <Button
                 label="Add items"
-                onPress={() => router.push({ pathname: '/pick-items', params: { tripId: current.id } })}
+                onPress={() =>
+                  router.push({ pathname: '/pick-items', params: { tripId: current.id } })
+                }
               />
             </View>
           </View>
@@ -134,7 +141,10 @@ export default function TripScreen() {
             <View
               style={[
                 styles.check,
-                { borderColor: theme.text, backgroundColor: item.packed ? theme.text : 'transparent' },
+                {
+                  borderColor: theme.text,
+                  backgroundColor: item.packed ? theme.text : 'transparent',
+                },
               ]}>
               {item.packed && (
                 <ThemedText type="smallBold" style={{ color: theme.background }}>

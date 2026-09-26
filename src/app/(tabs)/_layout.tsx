@@ -34,7 +34,11 @@ export default function TabsLayout() {
         name="calendar"
         options={{
           title: 'Calendar',
-          tabBarIcon: tabIcon({ ios: 'calendar', android: 'calendar_month', web: 'calendar_month' }),
+          tabBarIcon: tabIcon({
+            ios: 'calendar',
+            android: 'calendar_month',
+            web: 'calendar_month',
+          }),
         }}
       />
       <Tabs.Screen

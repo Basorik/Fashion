@@ -24,7 +24,9 @@ export function MonthGrid({ year, month, selected, today, marks, onSelect }: Pro
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const cells: (string | null)[] = [
     ...Array<null>(leadingBlanks).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, index) => toDateString(new Date(year, month, index + 1))),
+    ...Array.from({ length: daysInMonth }, (_, index) =>
+      toDateString(new Date(year, month, index + 1)),
+    ),
   ];
   while (cells.length % 7 !== 0) cells.push(null);
 
@@ -56,13 +58,17 @@ export function MonthGrid({ year, month, selected, today, marks, onSelect }: Pro
                   isSelected && { backgroundColor: theme.text },
                   !isSelected && day === today && { borderWidth: 1, borderColor: theme.text },
                 ]}>
-                <ThemedText type="small" style={{ color: isSelected ? theme.background : theme.text }}>
+                <ThemedText
+                  type="small"
+                  style={{ color: isSelected ? theme.background : theme.text }}>
                   {Number(day.slice(8))}
                 </ThemedText>
               </View>
               <View style={styles.dots}>
                 {mark?.worn && <View style={[styles.dot, { backgroundColor: theme.text }]} />}
-                {mark?.planned && <View style={[styles.dot, { borderColor: theme.text, borderWidth: 1 }]} />}
+                {mark?.planned && (
+                  <View style={[styles.dot, { borderColor: theme.text, borderWidth: 1 }]} />
+                )}
               </View>
             </Pressable>
           );

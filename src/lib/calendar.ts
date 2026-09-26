@@ -10,12 +10,12 @@ export async function getDayMarks(db: SQLiteDatabase, from: string, to: string) 
     db.getAllAsync<{ day: string }>(
       'SELECT DISTINCT worn_on AS day FROM wears WHERE worn_on BETWEEN ? AND ?',
       from,
-      to
+      to,
     ),
     db.getAllAsync<{ day: string }>(
       'SELECT DISTINCT planned_on AS day FROM plans WHERE planned_on BETWEEN ? AND ?',
       from,
-      to
+      to,
     ),
   ]);
   const marks: DayMarks = {};
@@ -36,19 +36,19 @@ export async function getDayDetail(db: SQLiteDatabase, day: string): Promise<Day
       `SELECT DISTINCT items.id, items.name, items.photo FROM wears
        JOIN items ON items.id = wears.item_id
        WHERE wears.worn_on = ? ORDER BY items.category, items.name`,
-      day
+      day,
     ),
     db.getAllAsync<DayDetail['outfits'][number]>(
       `SELECT outfit_wears.id AS wearId, outfits.id AS outfitId, outfits.name FROM outfit_wears
        JOIN outfits ON outfits.id = outfit_wears.outfit_id
        WHERE outfit_wears.worn_on = ? ORDER BY outfit_wears.id`,
-      day
+      day,
     ),
     db.getAllAsync<DayDetail['plans'][number]>(
       `SELECT plans.id AS planId, outfits.id AS outfitId, outfits.name FROM plans
        JOIN outfits ON outfits.id = plans.outfit_id
        WHERE plans.planned_on = ? ORDER BY plans.id`,
-      day
+      day,
     ),
   ]);
   return { items, outfits, plans };

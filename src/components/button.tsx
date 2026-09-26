@@ -20,7 +20,10 @@ export function Button({ label, onPress, disabled, primary }: Props) {
       onPress={onPress}
       style={[
         styles.button,
-        { backgroundColor: primary ? theme.text : theme.backgroundElement, opacity: disabled ? 0.4 : 1 },
+        {
+          backgroundColor: primary ? theme.text : theme.backgroundElement,
+          opacity: disabled ? 0.4 : 1,
+        },
       ]}>
       <ThemedText type="smallBold" style={{ color: primary ? theme.background : theme.text }}>
         {label}

@@ -23,7 +23,7 @@ export default function WardrobeScreen() {
   useFocusEffect(
     useCallback(() => {
       listItems(db, category).then(setItems);
-    }, [db, category])
+    }, [db, category]),
   );
 
   const tileSize = (width - Spacing.three * 2 - Spacing.two * (COLUMNS - 1)) / COLUMNS;

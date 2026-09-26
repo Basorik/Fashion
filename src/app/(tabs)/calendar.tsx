@@ -26,7 +26,10 @@ export default function CalendarScreen() {
   const db = useSQLiteContext();
   const theme = useTheme();
   const today = getToday();
-  const [cursor, setCursor] = useState(() => ({ year: new Date().getFullYear(), month: new Date().getMonth() }));
+  const [cursor, setCursor] = useState(() => ({
+    year: new Date().getFullYear(),
+    month: new Date().getMonth(),
+  }));
   const [selected, setSelected] = useState(today);
   const [marks, setMarks] = useState<DayMarks>({});
   const [detail, setDetail] = useState<DayDetail | null>(null);
@@ -56,7 +59,10 @@ export default function CalendarScreen() {
         <TodaySuggestions />
 
         <View style={styles.monthHeader}>
-          <Pressable accessibilityLabel="Previous month" hitSlop={12} onPress={() => shiftMonth(-1)}>
+          <Pressable
+            accessibilityLabel="Previous month"
+            hitSlop={12}
+            onPress={() => shiftMonth(-1)}>
             <ThemedText type="subtitle">‹</ThemedText>
           </Pressable>
           <ThemedText type="smallBold">{formatMonth(cursor.year, cursor.month)}</ThemedText>
@@ -78,7 +84,9 @@ export default function CalendarScreen() {
         </ThemedText>
 
         {detail?.plans.map((plan) => (
-          <View key={plan.planId} style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
+          <View
+            key={plan.planId}
+            style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
             <View style={styles.cardText}>
               <ThemedText type="small" themeColor="textSecondary">
                 Planned
@@ -113,7 +121,9 @@ export default function CalendarScreen() {
         ))}
 
         {detail?.outfits.map((outfit) => (
-          <View key={outfit.wearId} style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
+          <View
+            key={outfit.wearId}
+            style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
             <View style={styles.cardText}>
               <ThemedText type="small" themeColor="textSecondary">
                 Wore outfit
@@ -137,9 +147,15 @@ export default function CalendarScreen() {
         ))}
 
         {detail && detail.items.length > 0 && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.items}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.items}>
             {detail.items.map((item) => (
-              <Link key={item.id} href={{ pathname: '/item/[id]', params: { id: item.id } }} asChild>
+              <Link
+                key={item.id}
+                href={{ pathname: '/item/[id]', params: { id: item.id } }}
+                asChild>
                 <Pressable accessibilityLabel={item.name} style={styles.item}>
                   <ItemPhoto photo={item.photo} name={item.name} style={styles.itemPhoto} />
                   <ThemedText type="small" numberOfLines={1}>
@@ -159,13 +175,17 @@ export default function CalendarScreen() {
           {isPastOrToday && (
             <Button
               label="Log an outfit"
-              onPress={() => router.push({ pathname: '/pick-outfit', params: { date: selected, mode: 'log' } })}
+              onPress={() =>
+                router.push({ pathname: '/pick-outfit', params: { date: selected, mode: 'log' } })
+              }
             />
           )}
           {isFutureOrToday && (
             <Button
               label="Plan an outfit"
-              onPress={() => router.push({ pathname: '/pick-outfit', params: { date: selected, mode: 'plan' } })}
+              onPress={() =>
+                router.push({ pathname: '/pick-outfit', params: { date: selected, mode: 'plan' } })
+              }
             />
           )}
         </View>

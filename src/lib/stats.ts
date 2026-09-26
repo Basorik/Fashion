@@ -3,7 +3,10 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { addDays } from '@/lib/dates';
 import { today, type Item } from '@/lib/db';
 
-type RankedItem = Pick<Item, 'id' | 'name' | 'photo'> & { wearCount: number; lastWorn: string | null };
+type RankedItem = Pick<Item, 'id' | 'name' | 'photo'> & {
+  wearCount: number;
+  lastWorn: string | null;
+};
 
 export type WardrobeStats = {
   itemCount: number;
@@ -45,32 +48,32 @@ export async function getWardrobeStats(db: SQLiteDatabase): Promise<WardrobeStat
         (SELECT SUM(price) FROM items) AS totalValue,
         (SELECT COUNT(*) FROM wears JOIN items ON items.id = wears.item_id
           WHERE items.price IS NOT NULL) AS pricedWears`,
-      addDays(now, -30)
+      addDays(now, -30),
     ),
     db.getAllAsync<RankedItem>(
-      `${rankedQuery} HAVING wearCount > 0 ORDER BY wearCount DESC, lastWorn DESC LIMIT 5`
+      `${rankedQuery} HAVING wearCount > 0 ORDER BY wearCount DESC, lastWorn DESC LIMIT 5`,
     ),
     // Never-worn items first, then the ones worn longest ago.
     db.getAllAsync<RankedItem>(
-      `${rankedQuery} ORDER BY lastWorn IS NOT NULL, lastWorn ASC, wearCount ASC LIMIT 5`
+      `${rankedQuery} ORDER BY lastWorn IS NOT NULL, lastWorn ASC, wearCount ASC LIMIT 5`,
     ),
     db.getAllAsync<{ label: string; count: number }>(
-      'SELECT category AS label, COUNT(*) AS count FROM items GROUP BY category ORDER BY count DESC'
+      'SELECT category AS label, COUNT(*) AS count FROM items GROUP BY category ORDER BY count DESC',
     ),
     db.getAllAsync<{ label: string; count: number }>(
       `SELECT value AS label, COUNT(*) AS count FROM item_tags
-       WHERE tag_group = 'Color' GROUP BY value ORDER BY count DESC LIMIT 8`
+       WHERE tag_group = 'Color' GROUP BY value ORDER BY count DESC LIMIT 8`,
     ),
     db.getAllAsync<{ label: string; amount: number }>(
       `SELECT substr(created_at, 1, 7) AS label, SUM(price) AS amount FROM items
        WHERE price IS NOT NULL AND created_at >= ?
        GROUP BY label ORDER BY label`,
-      addDays(now, -365)
+      addDays(now, -365),
     ),
     db.getFirstAsync<{ share: number | null }>(
       `SELECT CAST(COUNT(DISTINCT wears.item_id) AS REAL) / NULLIF((SELECT COUNT(*) FROM items), 0) AS share
        FROM wears WHERE worn_on > ?`,
-      addDays(now, -90)
+      addDays(now, -90),
     ),
   ]);
 

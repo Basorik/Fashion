@@ -19,7 +19,7 @@ export default function OutfitsScreen() {
   useFocusEffect(
     useCallback(() => {
       listOutfits(db).then(setOutfits);
-    }, [db])
+    }, [db]),
   );
 
   const tileSize = (width - Spacing.three * 2 - Spacing.three * (COLUMNS - 1)) / COLUMNS;

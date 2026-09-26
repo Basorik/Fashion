@@ -36,7 +36,7 @@ function TagGroupRow({ group, value, onChange }: Props & { group: TagGroup }) {
     onChange(
       isSelected
         ? value.filter((tag) => !(tag.group === group && tag.value === tagValue))
-        : [...value, { group, value: tagValue }]
+        : [...value, { group, value: tagValue }],
     );
   }
 
@@ -64,7 +64,10 @@ function TagGroupRow({ group, value, onChange }: Props & { group: TagGroup }) {
               accessibilityState={{ checked: active }}
               accessibilityLabel={`${group}: ${option}`}
               onPress={() => toggle(option)}
-              style={[styles.chip, { backgroundColor: active ? theme.text : theme.backgroundElement }]}>
+              style={[
+                styles.chip,
+                { backgroundColor: active ? theme.text : theme.backgroundElement },
+              ]}>
               <ThemedText type="small" style={{ color: active ? theme.background : theme.text }}>
                 {option}
               </ThemedText>
@@ -81,7 +84,11 @@ function TagGroupRow({ group, value, onChange }: Props & { group: TagGroup }) {
             returnKeyType="done"
             placeholder={`New ${group.toLowerCase()}`}
             placeholderTextColor={theme.textSecondary}
-            style={[styles.chip, styles.input, { backgroundColor: theme.backgroundElement, color: theme.text }]}
+            style={[
+              styles.chip,
+              styles.input,
+              { backgroundColor: theme.backgroundElement, color: theme.text },
+            ]}
           />
         ) : (
           <Pressable

@@ -23,7 +23,10 @@ export type ItemWithStats = Item & {
   lastWorn: string | null;
 };
 
-export type ItemInput = Pick<Item, 'name' | 'category' | 'brand' | 'price' | 'photo' | 'barcode'> & {
+export type ItemInput = Pick<
+  Item,
+  'name' | 'category' | 'brand' | 'price' | 'photo' | 'barcode'
+> & {
   tags: Tag[];
 };
 
@@ -193,25 +196,25 @@ export function listItems(db: SQLiteDatabase, category?: Category) {
   if (category) {
     return db.getAllAsync<ItemWithStats>(
       `${itemWithStatsQuery} WHERE items.category = ? GROUP BY items.id ORDER BY items.id DESC`,
-      category
+      category,
     );
   }
   return db.getAllAsync<ItemWithStats>(
-    `${itemWithStatsQuery} GROUP BY items.id ORDER BY items.id DESC`
+    `${itemWithStatsQuery} GROUP BY items.id ORDER BY items.id DESC`,
   );
 }
 
 export function getItem(db: SQLiteDatabase, id: number) {
   return db.getFirstAsync<ItemWithStats>(
     `${itemWithStatsQuery} WHERE items.id = ? GROUP BY items.id`,
-    id
+    id,
   );
 }
 
 export function listItemTags(db: SQLiteDatabase, itemId: number) {
   return db.getAllAsync<Tag>(
     'SELECT tag_group AS "group", value FROM item_tags WHERE item_id = ? ORDER BY tag_group, value',
-    itemId
+    itemId,
   );
 }
 
@@ -222,7 +225,7 @@ async function replaceTags(db: SQLiteDatabase, itemId: number, tags: Tag[]) {
       'INSERT OR IGNORE INTO item_tags (item_id, tag_group, value) VALUES (?, ?, ?)',
       itemId,
       tag.group,
-      tag.value
+      tag.value,
     );
   }
 }
@@ -237,7 +240,7 @@ export async function addItem(db: SQLiteDatabase, item: ItemInput) {
       item.brand,
       item.price,
       item.photo,
-      item.barcode
+      item.barcode,
     );
     itemId = result.lastInsertRowId;
     await replaceTags(db, itemId, item.tags);
@@ -255,7 +258,7 @@ export async function updateItem(db: SQLiteDatabase, id: number, item: ItemInput
       item.price,
       item.photo,
       item.barcode,
-      id
+      id,
     );
     await replaceTags(db, id, item.tags);
   });
@@ -276,7 +279,7 @@ export async function logWear(db: SQLiteDatabase, itemId: number, wornOn = today
 export async function undoLastWear(db: SQLiteDatabase, itemId: number) {
   await db.runAsync(
     'DELETE FROM wears WHERE id = (SELECT id FROM wears WHERE item_id = ? ORDER BY worn_on DESC, id DESC LIMIT 1)',
-    itemId
+    itemId,
   );
 }
 
@@ -292,7 +295,7 @@ export function listWornWith(db: SQLiteDatabase, itemId: number, limit = 3) {
      ORDER BY times DESC, items.id DESC
      LIMIT ?`,
     itemId,
-    limit
+    limit,
   );
 }
 
@@ -348,7 +351,7 @@ export function listOutfitItems(db: SQLiteDatabase, outfitId: number) {
      WHERE outfit_items.outfit_id = ?
      GROUP BY items.id
      ORDER BY outfit_items.position`,
-    outfitId
+    outfitId,
   );
 }
 
@@ -362,7 +365,7 @@ export async function addOutfit(db: SQLiteDatabase, name: string, itemIds: numbe
         'INSERT INTO outfit_items (outfit_id, item_id, position) VALUES (?, ?, ?)',
         outfitId,
         itemId,
-        position
+        position,
       );
     }
   });
@@ -380,7 +383,7 @@ export async function logOutfitWear(db: SQLiteDatabase, outfitId: number, wornOn
     const result = await db.runAsync(
       'INSERT INTO outfit_wears (outfit_id, worn_on) VALUES (?, ?)',
       outfitId,
-      wornOn
+      wornOn,
     );
     await db.runAsync(
       `INSERT INTO wears (item_id, worn_on, outfit_wear_id)
@@ -390,7 +393,7 @@ export async function logOutfitWear(db: SQLiteDatabase, outfitId: number, wornOn
       wornOn,
       result.lastInsertRowId,
       outfitId,
-      wornOn
+      wornOn,
     );
   });
 }
@@ -398,6 +401,6 @@ export async function logOutfitWear(db: SQLiteDatabase, outfitId: number, wornOn
 export async function undoLastOutfitWear(db: SQLiteDatabase, outfitId: number) {
   await db.runAsync(
     'DELETE FROM outfit_wears WHERE id = (SELECT id FROM outfit_wears WHERE outfit_id = ? ORDER BY worn_on DESC, id DESC LIMIT 1)',
-    outfitId
+    outfitId,
   );
 }

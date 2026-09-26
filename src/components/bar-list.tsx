@@ -16,7 +16,11 @@ export function BarList({ rows, format = String }: Props) {
   return (
     <View style={styles.list}>
       {rows.map((row) => (
-        <View key={row.label} style={styles.row} accessible accessibilityLabel={`${row.label}: ${format(row.value)}`}>
+        <View
+          key={row.label}
+          style={styles.row}
+          accessible
+          accessibilityLabel={`${row.label}: ${format(row.value)}`}>
           <ThemedText type="small" style={styles.label} numberOfLines={1}>
             {row.label}
           </ThemedText>

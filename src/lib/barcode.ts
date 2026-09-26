@@ -22,7 +22,7 @@ export async function lookupBarcode(code: string): Promise<ProductInfo | null> {
   try {
     const response = await fetch(
       `https://api.upcitemdb.com/prod/trial/lookup?upc=${encodeURIComponent(code)}`,
-      { headers: { Accept: 'application/json' } }
+      { headers: { Accept: 'application/json' } },
     );
     if (!response.ok) return null;
     const body = (await response.json()) as UpcItemDbResponse;
