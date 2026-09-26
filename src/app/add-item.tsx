@@ -16,7 +16,7 @@ import type { Tag } from '@/constants/tags';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { lookupBarcode } from '@/lib/barcode';
-import { importFromLink } from '@/lib/link-import';
+import { extractLink, importFromLink } from '@/lib/link-import';
 import { addItem, getItem, listItemTags, updateItem } from '@/lib/db';
 import { deletePhoto, photoUri, savePhoto } from '@/lib/photos';
 import { addWish, getWish, listWishTags, updateWish } from '@/lib/wishlist';
@@ -79,19 +79,25 @@ export default function ItemFormScreen() {
   }, [db, editingId, isWish]);
 
   async function importLink() {
-    const link = url.trim();
-    if (!/^https?:\/\//i.test(link)) {
-      setLookupMessage('Paste a full link starting with https://');
-      return;
-    }
     setImporting(true);
     setLookupMessage(null);
-    const product = await importFromLink(link);
+    const result = await importFromLink(url);
     setImporting(false);
-    if (!product) {
-      setLookupMessage("Couldn't read product details from that page. Fill them in below.");
+    if (!result.ok) {
+      setLookupMessage(
+        {
+          'no-link': "That doesn't look like a link. Paste the product page's address.",
+          blocked:
+            'This shop blocks apps from reading its pages. Fill the details in below, or save the product photo and add it from your library.',
+          'no-data': "Couldn't find product details on that page. Fill them in below.",
+          network: "Couldn't open that link. Check your connection and try again.",
+        }[result.reason],
+      );
       return;
     }
+    const { product } = result;
+    const link = extractLink(url);
+    if (link) setUrl(link);
     if (product.name) setName((current) => current || product.name!);
     if (product.brand) setBrand((current) => current || product.brand!);
     if (product.price !== null) setPrice((current) => current || String(product.price));
@@ -165,7 +171,7 @@ export default function ItemFormScreen() {
         tags,
       };
       if (isWish) {
-        const wish = { ...common, url: url.trim() || null };
+        const wish = { ...common, url: extractLink(url) };
         if (editingId === null) await addWish(db, wish);
         else await updateWish(db, editingId, wish);
       } else {
