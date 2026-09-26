@@ -24,8 +24,9 @@ import { extractLink, importFromLink } from '@/lib/link-import';
 import { inferCategory, inferTags, mergeTags, type ProductText } from '@/lib/tag-inference';
 import { addItem, getItem, listItemTags, updateItem } from '@/lib/db';
 import { parsePrice } from '@/lib/money';
+import { canRemoveBackground, removeBackground } from '@/lib/photo-ai';
 import { photoColorTags } from '@/lib/photo-colors';
-import { deletePhoto, photoUri, savePhoto } from '@/lib/photos';
+import { deletePhoto, isCutout, photoUri, savePhoto } from '@/lib/photos';
 import { addWish, getWish, listWishTags, updateWish } from '@/lib/wishlist';
 
 const pickerOptions: ImagePicker.ImagePickerOptions = {
@@ -36,8 +37,33 @@ const pickerOptions: ImagePicker.ImagePickerOptions = {
 };
 
 // A photo is either already stored for this item, or newly picked (a local
-// file or a product image URL) and not saved until the form is saved.
-type PhotoState = { stored: string } | { uri: string } | null;
+// file or a product image URL) and not saved until the form is saved. A new
+// cut-out keeps the photo it came from, so it can be undone.
+type PhotoSource = { stored: string } | { uri: string };
+type PhotoState = PhotoSource | { cutout: string; original: PhotoSource } | null;
+
+function displayUri(photo: NonNullable<PhotoState>) {
+  if ('stored' in photo) return photoUri(photo.stored);
+  return 'cutout' in photo ? photo.cutout : photo.uri;
+}
+
+// The picked (not yet stored) photo, or the one a new cut-out was made from.
+function shopPhotoUri(photo: PhotoState) {
+  const source = photo && 'cutout' in photo ? photo.original : photo;
+  return source && 'uri' in source ? source.uri : null;
+}
+
+function showsCutout(photo: PhotoState) {
+  return photo !== null && ('cutout' in photo || ('stored' in photo && isCutout(photo.stored)));
+}
+
+const cutoutProblems = {
+  unavailable: null,
+  'no-subject': "Couldn't pick out the item in this photo, so it keeps its background.",
+  'model-downloading':
+    'The background remover is still downloading to this phone. Try again in a minute.',
+  failed: "Couldn't remove the background from this photo.",
+};
 
 // Adds or edits a wardrobe item (`id`), or a wishlist entry (`list=wish`, `wishId`).
 export default function ItemFormScreen() {
@@ -66,6 +92,8 @@ export default function ItemFormScreen() {
   const [scanning, setScanning] = useState(false);
   const [lookingUp, setLookingUp] = useState(false);
   const [lookupMessage, setLookupMessage] = useState<string | null>(null);
+  const [cuttingOut, setCuttingOut] = useState(false);
+  const [photoMessage, setPhotoMessage] = useState<string | null>(null);
   const [saving, runSave] = useBusy();
 
   useEffect(() => {
@@ -131,17 +159,42 @@ export default function ItemFormScreen() {
     setLookupMessage(`Filled in from the link${added}. Check the details before saving.${pick}`);
   }
 
-  // Sets a new photo and, when the item has no color yet, tags its main colors.
+  // Replaces the shown photo with a cut-out of the item, unless another photo
+  // was picked in the meantime. Returns the cut-out's URI, or null.
+  async function cutOut(source: PhotoSource): Promise<string | null> {
+    const sourceUri = displayUri(source);
+    setCuttingOut(true);
+    setPhotoMessage(null);
+    const result = await removeBackground(sourceUri);
+    setCuttingOut(false);
+    if (!result.ok) {
+      setPhotoMessage(cutoutProblems[result.reason]);
+      return null;
+    }
+    setPhoto((current) =>
+      current && displayUri(current) === sourceUri
+        ? { cutout: result.uri, original: source }
+        : current,
+    );
+    return result.uri;
+  }
+
+  // Sets a new photo, cuts the item out of it where the phone can, and, when
+  // the item has no color yet, tags its main colors. Colors are read from the
+  // cut-out when there is one, so the background doesn't count.
   async function applyPhoto(uri: string) {
     setPhoto({ uri });
-    if (tags.some((tag) => tag.group === 'Color')) return;
-    const colors = await photoColorTags(uri);
+    setPhotoMessage(null);
+    const hasColor = tags.some((tag) => tag.group === 'Color');
+    const cutoutUri = canRemoveBackground ? await cutOut({ uri }) : null;
+    if (hasColor) return;
+    const colors = await photoColorTags(cutoutUri ?? uri, { cutout: cutoutUri !== null });
     if (colors.length === 0) return;
     setTags((current) =>
       current.some((tag) => tag.group === 'Color') ? current : mergeTags(current, colors),
     );
     setLookupMessage(
-      `Tagged ${colors.map((tag) => tag.value.toLowerCase()).join(' and ')} from the photo. Change it below if it's wrong.`,
+      `Tagged ${listWords(colors.map((tag) => tag.value.toLowerCase()))} from the photo. Change it below if it's wrong.`,
     );
   }
 
@@ -183,7 +236,13 @@ export default function ItemFormScreen() {
     if (!canSave) return;
     runSave(async () => {
       const storedPhoto =
-        photo === null ? null : 'stored' in photo ? photo.stored : await savePhoto(photo.uri);
+        photo === null
+          ? null
+          : 'stored' in photo
+            ? photo.stored
+            : 'cutout' in photo
+              ? await savePhoto(photo.cutout, { cutout: true })
+              : await savePhoto(photo.uri);
       const common = {
         name: name.trim(),
         category,
@@ -212,7 +271,8 @@ export default function ItemFormScreen() {
     }, 'Could not save');
   }
 
-  const previewUri = photo === null ? null : 'stored' in photo ? photoUri(photo.stored) : photo.uri;
+  const previewUri = photo === null ? null : displayUri(photo);
+  const cutoutShown = showsCutout(photo);
 
   return (
     <ThemedView style={styles.container}>
@@ -227,13 +287,23 @@ export default function ItemFormScreen() {
         keyboardDismissMode="interactive"
         automaticallyAdjustKeyboardInsets>
         {previewUri ? (
-          <Image
-            source={{ uri: previewUri }}
-            style={styles.preview}
-            contentFit="cover"
-            transition={150}
-            accessibilityLabel="Item photo"
-          />
+          <View style={[styles.preview, { backgroundColor: theme.backgroundElement }]}>
+            <Image
+              source={{ uri: previewUri }}
+              style={cutoutShown ? styles.cutout : StyleSheet.absoluteFill}
+              contentFit={cutoutShown ? 'contain' : 'cover'}
+              transition={150}
+              accessibilityLabel={cutoutShown ? 'Item photo, background removed' : 'Item photo'}
+            />
+            {cuttingOut && (
+              <View style={[styles.cuttingOut, { backgroundColor: theme.background }]}>
+                <ActivityIndicator />
+                <ThemedText type="small" themeColor="textSecondary">
+                  Removing background…
+                </ThemedText>
+              </View>
+            )}
+          </View>
         ) : (
           <View
             style={[
@@ -247,7 +317,7 @@ export default function ItemFormScreen() {
         {photoChoices.length > 0 && (
           <PhotoChoices
             uris={photoChoices}
-            selected={photo && 'uri' in photo ? photo.uri : null}
+            selected={shopPhotoUri(photo)}
             onSelect={(uri) => setPhoto({ uri })}
           />
         )}
@@ -258,6 +328,26 @@ export default function ItemFormScreen() {
             <Button label="Remove" onPress={() => setPhoto(null)} grow={false} variant="plain" />
           )}
         </View>
+        {photo && 'cutout' in photo && (
+          <Button
+            label="Keep the original background"
+            onPress={() => setPhoto(photo.original)}
+            variant="plain"
+          />
+        )}
+        {photo && canRemoveBackground && !cutoutShown && (
+          <Button
+            label="Remove background"
+            onPress={() => cutOut(photo as PhotoSource)}
+            busy={cuttingOut}
+            variant="secondary"
+          />
+        )}
+        {photoMessage && (
+          <ThemedText type="small" themeColor="textSecondary">
+            {photoMessage}
+          </ThemedText>
+        )}
 
         <View style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
           <ThemedText type="caption" themeColor="textSecondary">
@@ -383,6 +473,11 @@ export default function ItemFormScreen() {
   );
 }
 
+// "a", "a and b", "a, b and c"
+function listWords(words: string[]) {
+  return words.length < 2 ? words.join('') : `${words.slice(0, -1).join(', ')} and ${words.at(-1)}`;
+}
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <View style={styles.field}>
@@ -407,10 +502,26 @@ const styles = StyleSheet.create({
     width: '100%',
     aspectRatio: 4 / 5,
     borderRadius: Radius.large,
+    overflow: 'hidden',
   },
   placeholder: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  cutout: {
+    flex: 1,
+    margin: Spacing.four,
+  },
+  cuttingOut: {
+    position: 'absolute',
+    bottom: Spacing.three,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    borderRadius: Radius.large,
   },
   row: {
     flexDirection: 'row',
