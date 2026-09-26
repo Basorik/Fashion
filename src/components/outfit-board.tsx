@@ -4,6 +4,7 @@ import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanima
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { ItemPhoto } from '@/components/item-photo';
+import { Radius } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { BoardPiece } from '@/lib/board';
 
@@ -134,7 +135,7 @@ function DraggablePiece({
 
 const styles = StyleSheet.create({
   board: {
-    borderRadius: 12,
+    borderRadius: Radius.large,
     overflow: 'hidden',
   },
   piece: {
@@ -143,6 +144,6 @@ const styles = StyleSheet.create({
   photo: {
     width: '100%',
     height: '100%',
-    borderRadius: 8,
+    borderRadius: Radius.small,
   },
 });

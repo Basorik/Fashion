@@ -46,7 +46,7 @@ export function BarcodeScanner({ visible, onScanned, onClose }: Props) {
           <View style={styles.permission}>
             <ThemedText style={styles.light}>Bella needs the camera to scan barcodes.</ThemedText>
             <View style={styles.row}>
-              <Button label="Allow camera" onPress={requestPermission} primary />
+              <Button label="Allow camera" onPress={requestPermission} variant="primary" />
             </View>
           </View>
         )}

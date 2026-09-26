@@ -3,21 +3,24 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 
+import { HeaderTextButton } from '@/components/add-button';
 import { Button } from '@/components/button';
 import { ItemPhoto } from '@/components/item-photo';
 import { OutfitBoard } from '@/components/outfit-board';
 import { Stat } from '@/components/stat';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { useBusy } from '@/hooks/use-busy';
 import { getBoard, type BoardPiece } from '@/lib/board';
+import { formatRelativeDay } from '@/lib/dates';
 import {
   deleteOutfit,
   getOutfit,
   listOutfitItems,
   logOutfitWear,
   today,
-  undoLastOutfitWear,
+  undoOutfitWear,
   type ItemWithStats,
   type Outfit,
 } from '@/lib/db';
@@ -30,6 +33,7 @@ export default function OutfitScreen() {
   const [items, setItems] = useState<ItemWithStats[]>([]);
   const [board, setBoard] = useState<BoardPiece[] | null>(null);
   const { width } = useWindowDimensions();
+  const [busy, run] = useBusy();
 
   const load = useCallback(() => {
     getOutfit(db, outfitId).then(setOutfit);
@@ -44,15 +48,15 @@ export default function OutfitScreen() {
   }
 
   const current = outfit;
-  const woreToday = current.lastWorn === today();
+  const now = today();
+  const woreToday = current.lastWorn === now;
 
-  async function toggleWear() {
-    if (woreToday) {
-      await undoLastOutfitWear(db, current.id);
-    } else {
-      await logOutfitWear(db, current.id);
-    }
-    load();
+  function toggleWear() {
+    run(async () => {
+      if (woreToday) await undoOutfitWear(db, current.id);
+      else await logOutfitWear(db, current.id);
+      load();
+    });
   }
 
   function confirmDelete() {
@@ -64,10 +68,11 @@ export default function OutfitScreen() {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: async () => {
-            await deleteOutfit(db, current.id);
-            router.back();
-          },
+          onPress: () =>
+            run(async () => {
+              await deleteOutfit(db, current.id);
+              router.back();
+            }),
         },
       ],
     );
@@ -75,13 +80,27 @@ export default function OutfitScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <Stack.Screen options={{ title: current.name }} />
+      <Stack.Screen
+        options={{
+          title: '',
+          headerRight: () => (
+            <HeaderTextButton
+              href={{ pathname: '/new-outfit', params: { id: current.id } }}
+              label="Edit"
+            />
+          ),
+        }}
+      />
       <ScrollView contentContainerStyle={styles.content}>
+        <ThemedText type="title">{current.name}</ThemedText>
         {board && <OutfitBoard pieces={board} size={width - Spacing.three * 2} />}
 
         <View style={styles.stats}>
           <Stat label="Times worn" value={String(current.wearCount)} />
-          <Stat label="Last worn" value={current.lastWorn ?? 'Never'} />
+          <Stat
+            label="Last worn"
+            value={current.lastWorn ? formatRelativeDay(current.lastWorn, now) : 'Never'}
+          />
           <Stat label="Items" value={String(items.length)} />
         </View>
 
@@ -89,8 +108,9 @@ export default function OutfitScreen() {
           <Button
             label={woreToday ? 'Worn today · Undo' : 'I wore this today'}
             onPress={toggleWear}
+            busy={busy}
             disabled={items.length === 0}
-            primary={!woreToday}
+            variant={woreToday ? 'secondary' : 'primary'}
           />
         </View>
 
@@ -103,25 +123,29 @@ export default function OutfitScreen() {
           </View>
         )}
 
+        {items.length > 0 && (
+          <ThemedText type="caption" themeColor="textSecondary" style={styles.sectionTitle}>
+            In this outfit
+          </ThemedText>
+        )}
         {items.map((item) => (
           <Link key={item.id} href={{ pathname: '/item/[id]', params: { id: item.id } }} asChild>
-            <Pressable accessibilityLabel={item.name} style={styles.item}>
+            <Pressable
+              accessibilityLabel={item.name}
+              style={({ pressed }) => [styles.item, pressed && styles.pressed]}>
               <ItemPhoto photo={item.photo} name={item.name} style={styles.thumb} />
               <View style={styles.itemText}>
                 <ThemedText numberOfLines={1}>{item.name}</ThemedText>
                 <ThemedText type="small" themeColor="textSecondary">
-                  {item.category} · worn {item.wearCount}×
+                  {item.category} ·{' '}
+                  {item.wearCount === 0 ? 'not worn yet' : `worn ${item.wearCount}×`}
                 </ThemedText>
               </View>
             </Pressable>
           </Link>
         ))}
 
-        <Pressable accessibilityRole="button" onPress={confirmDelete} style={styles.deleteButton}>
-          <ThemedText type="small" style={styles.deleteText}>
-            Delete outfit
-          </ThemedText>
-        </Pressable>
+        <Button label="Delete outfit" onPress={confirmDelete} variant="danger" />
       </ScrollView>
     </ThemedView>
   );
@@ -133,7 +157,14 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: Spacing.three,
+    paddingBottom: Spacing.five,
     gap: Spacing.three,
+  },
+  sectionTitle: {
+    marginTop: Spacing.two,
+  },
+  pressed: {
+    opacity: 0.7,
   },
   stats: {
     flexDirection: 'row',
@@ -150,16 +181,9 @@ const styles = StyleSheet.create({
   thumb: {
     width: 64,
     height: 80,
-    borderRadius: 8,
+    borderRadius: Radius.small,
   },
   itemText: {
     flex: 1,
-  },
-  deleteButton: {
-    alignItems: 'center',
-    paddingVertical: Spacing.two,
-  },
-  deleteText: {
-    color: '#D93036',
   },
 });

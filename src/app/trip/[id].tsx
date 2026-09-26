@@ -7,7 +7,8 @@ import { Button } from '@/components/button';
 import { ItemPhoto } from '@/components/item-photo';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { useBusy } from '@/hooks/use-busy';
 import { useTheme } from '@/hooks/use-theme';
 import { formatDay } from '@/lib/dates';
 import {
@@ -27,6 +28,7 @@ export default function TripScreen() {
   const theme = useTheme();
   const [trip, setTrip] = useState<Trip | null>(null);
   const [items, setItems] = useState<PackingItem[]>([]);
+  const [, run] = useBusy();
 
   const load = useCallback(() => {
     getTrip(db, tripId).then(setTrip);
@@ -52,10 +54,11 @@ export default function TripScreen() {
       {
         text: 'Remove',
         style: 'destructive',
-        onPress: async () => {
-          await removeTripItem(db, current.id, item.id);
-          load();
-        },
+        onPress: () =>
+          run(async () => {
+            await removeTripItem(db, current.id, item.id);
+            load();
+          }),
       },
     ]);
   }
@@ -66,10 +69,11 @@ export default function TripScreen() {
       {
         text: 'Delete',
         style: 'destructive',
-        onPress: async () => {
-          await deleteTrip(db, current.id);
-          router.back();
-        },
+        onPress: () =>
+          run(async () => {
+            await deleteTrip(db, current.id);
+            router.back();
+          }),
       },
     ]);
   }
@@ -83,13 +87,14 @@ export default function TripScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <Stack.Screen options={{ title: current.name }} />
+      <Stack.Screen options={{ title: '' }} />
       <SectionList
         sections={sections}
         keyExtractor={(item) => String(item.id)}
         contentContainerStyle={styles.list}
         ListHeaderComponent={
           <View style={styles.header}>
+            <ThemedText type="title">{current.name}</ThemedText>
             <ThemedText themeColor="textSecondary">
               {[
                 current.startOn &&
@@ -126,7 +131,10 @@ export default function TripScreen() {
           </ThemedText>
         }
         renderSectionHeader={({ section }) => (
-          <ThemedText type="smallBold" style={styles.sectionTitle}>
+          <ThemedText
+            type="caption"
+            themeColor="textSecondary"
+            style={[styles.sectionTitle, { backgroundColor: theme.background }]}>
             {section.title}
           </ThemedText>
         )}
@@ -142,12 +150,12 @@ export default function TripScreen() {
               style={[
                 styles.check,
                 {
-                  borderColor: theme.text,
-                  backgroundColor: item.packed ? theme.text : 'transparent',
+                  borderColor: item.packed ? theme.accent : theme.textSecondary,
+                  backgroundColor: item.packed ? theme.accent : 'transparent',
                 },
               ]}>
               {item.packed && (
-                <ThemedText type="smallBold" style={{ color: theme.background }}>
+                <ThemedText type="smallBold" style={{ color: theme.onAccent }}>
                   ✓
                 </ThemedText>
               )}
@@ -167,11 +175,12 @@ export default function TripScreen() {
                 Long-press an item to remove it.
               </ThemedText>
             )}
-            <Pressable accessibilityRole="button" onPress={confirmDelete} style={styles.delete}>
-              <ThemedText type="small" style={styles.deleteText}>
-                Delete packing list
-              </ThemedText>
-            </Pressable>
+            <Button
+              label="Delete packing list"
+              onPress={confirmDelete}
+              variant="danger"
+              grow={false}
+            />
           </View>
         }
       />
@@ -196,14 +205,14 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   sectionTitle: {
-    marginTop: Spacing.three,
-    marginBottom: Spacing.two,
+    paddingTop: Spacing.three,
+    paddingBottom: Spacing.two,
   },
   item: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.three,
-    paddingVertical: Spacing.one,
+    paddingVertical: Spacing.two,
   },
   check: {
     width: 24,
@@ -216,7 +225,7 @@ const styles = StyleSheet.create({
   thumb: {
     width: 40,
     height: 50,
-    borderRadius: 6,
+    borderRadius: Radius.small,
   },
   flex: {
     flex: 1,
@@ -232,11 +241,5 @@ const styles = StyleSheet.create({
     marginTop: Spacing.four,
     alignItems: 'center',
     gap: Spacing.two,
-  },
-  delete: {
-    paddingVertical: Spacing.two,
-  },
-  deleteText: {
-    color: '#D93036',
   },
 });

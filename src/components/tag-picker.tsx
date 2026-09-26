@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
+import { Chip } from '@/components/chip';
+import { TextField } from '@/components/text-field';
 import { ThemedText } from '@/components/themed-text';
 import { TagGroupNames, TagGroups, type Tag, type TagGroup } from '@/constants/tags';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 type Props = {
@@ -40,8 +42,11 @@ function TagGroupRow({ group, value, onChange }: Props & { group: TagGroup }) {
     );
   }
 
+  // Runs once on blur (submitting blurs the field). Typing a preset in another case picks the preset.
   function addCustom() {
-    const tagValue = draft.trim();
+    const typed = draft.trim();
+    const tagValue =
+      options.find((option) => option.toLowerCase() === typed.toLowerCase()) ?? typed;
     if (tagValue && !selected.some((tag) => tag.toLowerCase() === tagValue.toLowerCase())) {
       onChange([...value, { group, value: tagValue }]);
     }
@@ -51,51 +56,37 @@ function TagGroupRow({ group, value, onChange }: Props & { group: TagGroup }) {
 
   return (
     <View style={styles.group}>
-      <ThemedText type="small" themeColor="textSecondary">
+      <ThemedText type="caption" themeColor="textSecondary">
         {group}
       </ThemedText>
       <View style={styles.chips}>
-        {options.map((option) => {
-          const active = selected.includes(option);
-          return (
-            <Pressable
-              key={option}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: active }}
-              accessibilityLabel={`${group}: ${option}`}
-              onPress={() => toggle(option)}
-              style={[
-                styles.chip,
-                { backgroundColor: active ? theme.text : theme.backgroundElement },
-              ]}>
-              <ThemedText type="small" style={{ color: active ? theme.background : theme.text }}>
-                {option}
-              </ThemedText>
-            </Pressable>
-          );
-        })}
+        {options.map((option) => (
+          <Chip
+            key={option}
+            label={option}
+            selected={selected.includes(option)}
+            onPress={() => toggle(option)}
+            accessibilityRole="checkbox"
+            accessibilityLabel={`${group}: ${option}`}
+          />
+        ))}
         {adding ? (
-          <TextInput
+          <TextField
             autoFocus
             value={draft}
             onChangeText={setDraft}
-            onSubmitEditing={addCustom}
             onBlur={addCustom}
             returnKeyType="done"
             placeholder={`New ${group.toLowerCase()}`}
-            placeholderTextColor={theme.textSecondary}
-            style={[
-              styles.chip,
-              styles.input,
-              { backgroundColor: theme.backgroundElement, color: theme.text },
-            ]}
+            style={styles.input}
           />
         ) : (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`Add a ${group.toLowerCase()} tag`}
             onPress={() => setAdding(true)}
-            style={[styles.chip, { borderColor: theme.backgroundSelected, borderWidth: 1 }]}>
+            hitSlop={4}
+            style={[styles.addChip, { borderColor: theme.border }]}>
             <ThemedText type="small" themeColor="textSecondary">
               + Add
             </ThemedText>
@@ -119,13 +110,18 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: Spacing.two,
   },
-  chip: {
-    borderRadius: 999,
+  addChip: {
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderStyle: 'dashed',
     paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one + 2,
+    paddingVertical: Spacing.one + 1,
   },
   input: {
-    minWidth: 120,
+    minWidth: 140,
+    minHeight: 32,
+    borderRadius: Radius.pill,
+    paddingVertical: Spacing.one,
     fontSize: 14,
   },
 });

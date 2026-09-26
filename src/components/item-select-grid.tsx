@@ -6,7 +6,7 @@ import { CategoryChips } from '@/components/category-chips';
 import { ItemPhoto } from '@/components/item-photo';
 import { ThemedText } from '@/components/themed-text';
 import type { Category } from '@/constants/categories';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { listItems, type ItemWithStats } from '@/lib/db';
 
@@ -77,13 +77,13 @@ export function ItemSelectGrid({ selected, onChange, header }: Props) {
                 {
                   width: tileSize,
                   height: tileSize * 1.25,
-                  borderColor: isSelected ? theme.text : 'transparent',
+                  borderColor: isSelected ? theme.accent : 'transparent',
                 },
               ]}
             />
             {isSelected && (
-              <View style={[styles.badge, { backgroundColor: theme.text }]}>
-                <ThemedText type="smallBold" style={{ color: theme.background }}>
+              <View style={[styles.badge, { backgroundColor: theme.accent }]}>
+                <ThemedText type="smallBold" style={{ color: theme.onAccent }}>
                   {order + 1}
                 </ThemedText>
               </View>
@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
     marginHorizontal: -Spacing.three,
   },
   tile: {
-    borderRadius: 8,
+    borderRadius: Radius.medium,
     borderWidth: 3,
     marginBottom: Spacing.one,
   },

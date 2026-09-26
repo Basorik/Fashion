@@ -13,7 +13,7 @@ function tabIcon(name: SymbolViewProps['name']) {
 
 export default function TabsLayout() {
   return (
-    <Tabs>
+    <Tabs screenOptions={{ headerShadowVisible: false, headerTitleAlign: 'left' }}>
       <Tabs.Screen
         name="index"
         options={{

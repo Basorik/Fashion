@@ -7,9 +7,10 @@ import { OutfitCollage } from '@/components/outfit-collage';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { useBusy } from '@/hooks/use-busy';
 import { planOutfit } from '@/lib/calendar';
-import { formatDay } from '@/lib/dates';
-import { listOutfits, logOutfitWear, type Outfit } from '@/lib/db';
+import { formatDay, formatRelativeDay } from '@/lib/dates';
+import { listOutfits, logOutfitWear, today, type Outfit } from '@/lib/db';
 import { addTripOutfit } from '@/lib/trips';
 
 // Picks an outfit to log as worn (mode=log) or plan (mode=plan) on `date`,
@@ -21,7 +22,9 @@ export default function PickOutfitScreen() {
     tripId?: string;
   }>();
   const db = useSQLiteContext();
-  const [outfits, setOutfits] = useState<Outfit[]>([]);
+  const [outfits, setOutfits] = useState<Outfit[] | null>(null);
+  const [, run] = useBusy();
+  const now = today();
 
   useFocusEffect(
     useCallback(() => {
@@ -29,15 +32,17 @@ export default function PickOutfitScreen() {
     }, [db]),
   );
 
-  async function pick(outfit: Outfit) {
-    if (mode === 'trip') {
-      await addTripOutfit(db, Number(tripId), outfit.id);
-    } else if (mode === 'plan') {
-      await planOutfit(db, outfit.id, date!);
-    } else {
-      await logOutfitWear(db, outfit.id, date!);
-    }
-    router.back();
+  function pick(outfit: Outfit) {
+    run(async () => {
+      if (mode === 'trip') {
+        await addTripOutfit(db, Number(tripId), outfit.id);
+      } else if (mode === 'plan') {
+        await planOutfit(db, outfit.id, date!);
+      } else {
+        await logOutfitWear(db, outfit.id, date!);
+      }
+      router.back();
+    });
   }
 
   return (
@@ -51,21 +56,29 @@ export default function PickOutfitScreen() {
         }}
       />
       <FlatList
-        data={outfits}
+        data={outfits ?? []}
         keyExtractor={(outfit) => String(outfit.id)}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
-          <ThemedText themeColor="textSecondary" style={styles.empty}>
-            Create an outfit on the Outfits tab first.
-          </ThemedText>
+          outfits === null ? null : (
+            <ThemedText themeColor="textSecondary" style={styles.empty}>
+              Create an outfit on the Outfits tab first.
+            </ThemedText>
+          )
         }
         renderItem={({ item: outfit }) => (
-          <Pressable accessibilityRole="button" onPress={() => pick(outfit)} style={styles.row}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={outfit.name}
+            onPress={() => pick(outfit)}
+            style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
             <OutfitCollage photos={outfit.photos} size={64} />
             <View style={styles.text}>
-              <ThemedText>{outfit.name}</ThemedText>
+              <ThemedText numberOfLines={1}>{outfit.name}</ThemedText>
               <ThemedText type="small" themeColor="textSecondary">
-                Worn {outfit.wearCount}× · last {outfit.lastWorn ?? 'never'}
+                {outfit.lastWorn
+                  ? `Worn ${outfit.wearCount}× · last: ${formatRelativeDay(outfit.lastWorn, now)}`
+                  : 'Not worn yet'}
               </ThemedText>
             </View>
           </Pressable>
@@ -90,6 +103,9 @@ const styles = StyleSheet.create({
   },
   text: {
     flex: 1,
+  },
+  pressed: {
+    opacity: 0.7,
   },
   empty: {
     textAlign: 'center',

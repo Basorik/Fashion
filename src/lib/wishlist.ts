@@ -2,7 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import type { Category } from '@/constants/categories';
 import type { Tag } from '@/constants/tags';
-import { addItem, type Item, type ItemInput } from '@/lib/db';
+import { insertItem, type Item, type ItemInput } from '@/lib/db';
 
 export type Wish = {
   id: number;
@@ -94,8 +94,11 @@ export async function markWishBought(db: SQLiteDatabase, wish: Wish, tags: Tag[]
     barcode: null,
     tags,
   };
-  const itemId = await addItem(db, input);
-  await deleteWish(db, wish.id);
+  let itemId = 0;
+  await db.withTransactionAsync(async () => {
+    itemId = await insertItem(db, input);
+    await db.runAsync('DELETE FROM wishes WHERE id = ?', wish.id);
+  });
   return itemId;
 }
 
@@ -152,7 +155,9 @@ export async function listOwnedWithTags(db: SQLiteDatabase): Promise<OwnedItem[]
   ]);
   const byItem = new Map<number, Tag[]>();
   for (const { itemId, group, value } of tags) {
-    byItem.set(itemId, [...(byItem.get(itemId) ?? []), { group, value }]);
+    const list = byItem.get(itemId) ?? [];
+    list.push({ group, value });
+    byItem.set(itemId, list);
   }
   return items.map((item) => ({ ...item, tags: byItem.get(item.id) ?? [] }));
 }
@@ -168,9 +173,15 @@ export async function listWishesByFit(db: SQLiteDatabase): Promise<WishWithMatch
       'SELECT wish_id AS wishId, tag_group AS "group", value FROM wish_tags',
     ),
   ]);
+  const tagsByWish = new Map<number, Tag[]>();
+  for (const { wishId, group, value } of wishTags) {
+    const list = tagsByWish.get(wishId) ?? [];
+    list.push({ group, value });
+    tagsByWish.set(wishId, list);
+  }
   return wishes
     .map((wish) => {
-      const tags = wishTags.filter((tag) => tag.wishId === wish.id);
+      const tags = tagsByWish.get(wish.id) ?? [];
       const candidate = { category: wish.category, tags };
       return { ...wish, matches: owned.filter((item) => goesWith(candidate, item)).length };
     })

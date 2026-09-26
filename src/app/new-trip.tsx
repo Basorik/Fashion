@@ -1,21 +1,23 @@
 import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ScrollView, StyleSheet } from 'react-native';
 
 import { Button } from '@/components/button';
-import { MonthGrid } from '@/components/month-grid';
+import { FooterBar } from '@/components/footer-bar';
+import { MonthGrid, MonthHeader } from '@/components/month-grid';
+import { TextField } from '@/components/text-field';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
+import { useBusy } from '@/hooks/use-busy';
 import { formatDay, formatMonth } from '@/lib/dates';
 import { today } from '@/lib/db';
 import { addTrip } from '@/lib/trips';
 
 export default function NewTripScreen() {
   const db = useSQLiteContext();
-  const theme = useTheme();
+  const [creating, run] = useBusy();
   const [name, setName] = useState('');
   const [cursor, setCursor] = useState(() => ({
     year: new Date().getFullYear(),
@@ -44,20 +46,22 @@ export default function NewTripScreen() {
     });
   }
 
-  async function create() {
-    const tripId = await addTrip(db, name.trim(), start, end ?? start);
-    router.replace({ pathname: '/trip/[id]', params: { id: tripId } });
+  function create() {
+    run(async () => {
+      const tripId = await addTrip(db, name.trim(), start, end ?? start);
+      router.replace({ pathname: '/trip/[id]', params: { id: tripId } });
+    }, 'Could not create packing list');
   }
 
   return (
     <ThemedView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <TextInput
+        <TextField
           value={name}
           onChangeText={setName}
           placeholder="Trip name, e.g. Lisbon weekend"
-          placeholderTextColor={theme.textSecondary}
-          style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text }]}
+          autoCapitalize="words"
+          returnKeyType="done"
         />
         <ThemedText type="small" themeColor="textSecondary">
           {start
@@ -66,18 +70,7 @@ export default function NewTripScreen() {
               : `${formatDay(start)} · tap the last day`
             : 'Dates (optional): tap the first day, then the last'}
         </ThemedText>
-        <View style={styles.monthHeader}>
-          <Pressable
-            accessibilityLabel="Previous month"
-            hitSlop={12}
-            onPress={() => shiftMonth(-1)}>
-            <ThemedText type="subtitle">‹</ThemedText>
-          </Pressable>
-          <ThemedText type="smallBold">{formatMonth(cursor.year, cursor.month)}</ThemedText>
-          <Pressable accessibilityLabel="Next month" hitSlop={12} onPress={() => shiftMonth(1)}>
-            <ThemedText type="subtitle">›</ThemedText>
-          </Pressable>
-        </View>
+        <MonthHeader title={formatMonth(cursor.year, cursor.month)} onShift={shiftMonth} />
         <MonthGrid
           year={cursor.year}
           month={cursor.month}
@@ -90,10 +83,16 @@ export default function NewTripScreen() {
           )}
           onSelect={selectDay}
         />
-        <View style={styles.row}>
-          <Button label="Create packing list" onPress={create} disabled={!name.trim()} primary />
-        </View>
       </ScrollView>
+      <FooterBar>
+        <Button
+          label="Create packing list"
+          onPress={create}
+          busy={creating}
+          disabled={!name.trim()}
+          variant="primary"
+        />
+      </FooterBar>
     </ThemedView>
   );
 }
@@ -105,20 +104,5 @@ const styles = StyleSheet.create({
   content: {
     padding: Spacing.three,
     gap: Spacing.three,
-  },
-  input: {
-    borderRadius: 8,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    fontSize: 16,
-  },
-  monthHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.two,
-  },
-  row: {
-    flexDirection: 'row',
   },
 });

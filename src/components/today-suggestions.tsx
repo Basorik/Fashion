@@ -5,7 +5,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { OutfitCollage } from '@/components/outfit-collage';
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { suggestOutfits, type Suggestion } from '@/lib/suggestions';
 import { formatTemperature, getTodayWeather, type Weather } from '@/lib/weather';
@@ -30,7 +30,7 @@ export function TodaySuggestions() {
 
   return (
     <View style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
-      <ThemedText type="smallBold">What to wear today</ThemedText>
+      <ThemedText type="subtitle">What to wear today</ThemedText>
       <ThemedText type="small" themeColor="textSecondary">
         {weather === undefined
           ? 'Checking the weather…'
@@ -50,7 +50,9 @@ export function TodaySuggestions() {
           key={outfit.id}
           href={{ pathname: '/outfit/[id]', params: { id: outfit.id } }}
           asChild>
-          <Pressable accessibilityLabel={outfit.name} style={styles.row}>
+          <Pressable
+            accessibilityLabel={`${outfit.name}. ${reason}`}
+            style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}>
             <OutfitCollage photos={outfit.photos} size={56} />
             <View style={styles.text}>
               <ThemedText type="smallBold">{outfit.name}</ThemedText>
@@ -67,7 +69,7 @@ export function TodaySuggestions() {
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 12,
+    borderRadius: Radius.large,
     padding: Spacing.three,
     gap: Spacing.two,
   },
