@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Platform, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
@@ -56,7 +56,12 @@ export default function BackupScreen() {
           setProgress(total > 0 ? `Adding photos, ${done} of ${total}` : null),
         );
         if (name) {
-          Alert.alert('Backup saved', `${name} is in the folder you picked.`);
+          Alert.alert(
+            'Backup saved',
+            Platform.OS === 'web'
+              ? `${name} is in your downloads.`
+              : `${name} is in the folder you picked.`,
+          );
         }
       } finally {
         setProgress(null);

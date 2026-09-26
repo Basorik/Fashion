@@ -37,10 +37,16 @@ export function isCutout(name: string) {
 }
 
 export function photoUri(name: string): string {
+  // The web version keeps shop images it couldn't download as their address.
+  if (/^https?:/i.test(name)) return name;
   return new File(photosDir(), name).uri;
 }
 
+// Photos are read straight from files on the phone; the web version loads them here.
+export async function loadPhotos() {}
+
 export function deletePhoto(name: string) {
+  if (/^https?:/i.test(name)) return;
   const file = new File(photosDir(), name);
   if (file.exists) {
     file.delete();
