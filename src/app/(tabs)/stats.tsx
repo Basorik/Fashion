@@ -1,9 +1,10 @@
-import { Link, useFocusEffect } from 'expo-router';
+import { Link, router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { BarList } from '@/components/bar-list';
+import { Button } from '@/components/button';
 import { ItemPhoto } from '@/components/item-photo';
 import { Stat } from '@/components/stat';
 import { ThemedText } from '@/components/themed-text';
@@ -38,8 +39,16 @@ export default function StatsScreen() {
       <ThemedView style={[styles.container, styles.empty]}>
         <ThemedText type="subtitle">No stats yet</ThemedText>
         <ThemedText themeColor="textSecondary" style={styles.center}>
-          Add items and log what you wear.
+          Add items and log what you wear to see what earns its place.
         </ThemedText>
+        <View style={styles.emptyAction}>
+          <Button
+            label="Add an item"
+            onPress={() => router.push('/add-item')}
+            variant="primary"
+            grow={false}
+          />
+        </View>
       </ThemedView>
     );
   }
@@ -155,7 +164,9 @@ function ItemRow({ items, empty }: { items: WardrobeStats['mostWorn']; empty: st
       contentContainerStyle={styles.items}>
       {items.map((item) => (
         <Link key={item.id} href={{ pathname: '/item/[id]', params: { id: item.id } }} asChild>
-          <Pressable accessibilityLabel={item.name} style={styles.item}>
+          <Pressable
+            accessibilityLabel={item.name}
+            style={({ pressed }) => [styles.item, pressed && styles.pressed]}>
             <ItemPhoto photo={item.photo} name={item.name} style={styles.itemPhoto} />
             <ThemedText type="small" numberOfLines={1}>
               {item.name}
@@ -182,6 +193,9 @@ const styles = StyleSheet.create({
   },
   center: {
     textAlign: 'center',
+  },
+  emptyAction: {
+    marginTop: Spacing.two,
   },
   content: {
     padding: Spacing.three,
