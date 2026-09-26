@@ -11,6 +11,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useBusy } from '@/hooks/use-busy';
+import { useDiscardGuard } from '@/hooks/use-discard-guard';
 import { addDays } from '@/lib/dates';
 import { listWornOn, setWornOn, today } from '@/lib/db';
 import { successFeedback } from '@/lib/haptics';
@@ -30,6 +31,8 @@ export default function LogWearScreen() {
   const [selected, setSelected] = useState<number[]>([]);
   // The day `selected` was loaded for; saving waits until it matches `day`.
   const [loadedDay, setLoadedDay] = useState<string | null>(null);
+  // What was already logged for that day, to ask before leaving with changes.
+  const [loggedIds, setLoggedIds] = useState<number[]>([]);
   const [reminder, setReminder] = useState<number | null | undefined>(undefined);
   const [saving, run] = useBusy();
 
@@ -38,6 +41,7 @@ export default function LogWearScreen() {
     listWornOn(db, day).then((ids) => {
       if (!current) return;
       setSelected(ids);
+      setLoggedIds(ids);
       setLoadedDay(day);
     });
     return () => {
@@ -49,11 +53,15 @@ export default function LogWearScreen() {
     getReminderHour().then(setReminder);
   }, []);
 
+  const changed =
+    loadedDay === day && [...selected].sort().join(',') !== [...loggedIds].sort().join(',');
+  const leave = useDiscardGuard(changed);
+
   function save() {
     run(async () => {
       await setWornOn(db, day, selected);
       successFeedback();
-      router.back();
+      leave(() => router.back());
     }, 'Could not save');
   }
 

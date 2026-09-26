@@ -1,8 +1,9 @@
-import { Link, useFocusEffect } from 'expo-router';
+import { Link, router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 
+import { Button } from '@/components/button';
 import { OutfitCollage } from '@/components/outfit-collage';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -37,8 +38,17 @@ export default function OutfitsScreen() {
             <View style={styles.empty}>
               <ThemedText type="subtitle">No outfits yet</ThemedText>
               <ThemedText themeColor="textSecondary" style={styles.emptyText}>
-                Tap + to put items from your wardrobe together.
+                Put a few items from your wardrobe together, or let Shuffle deal you one.
               </ThemedText>
+              <View style={styles.emptyActions}>
+                <Button
+                  label="New outfit"
+                  onPress={() => router.push('/new-outfit')}
+                  variant="primary"
+                  grow={false}
+                />
+                <Button label="Shuffle" onPress={() => router.push('/shuffle')} grow={false} />
+              </View>
             </View>
           )
         }
@@ -90,5 +100,10 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     textAlign: 'center',
+  },
+  emptyActions: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+    marginTop: Spacing.two,
   },
 });

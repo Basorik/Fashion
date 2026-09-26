@@ -5,11 +5,13 @@ import { FlatList, Pressable, StyleSheet, useWindowDimensions, View } from 'reac
 import { CategoryChips } from '@/components/category-chips';
 import { ItemPhoto } from '@/components/item-photo';
 import { StatusBadge } from '@/components/status-badge';
+import { TextField } from '@/components/text-field';
 import { ThemedText } from '@/components/themed-text';
 import type { Category } from '@/constants/categories';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { listItems, type ItemWithStats } from '@/lib/db';
+import { matchesSearch } from '@/lib/wardrobe-view';
 
 const COLUMNS = 3;
 
@@ -27,6 +29,7 @@ export function ItemSelectGrid({ selected, onChange, header }: Props) {
   const { width } = useWindowDimensions();
   const [items, setItems] = useState<ItemWithStats[]>([]);
   const [category, setCategory] = useState<Category | undefined>();
+  const [query, setQuery] = useState('');
 
   useEffect(() => {
     // Archived items are put away, so they aren't offered here.
@@ -37,18 +40,30 @@ export function ItemSelectGrid({ selected, onChange, header }: Props) {
     onChange(selected.includes(id) ? selected.filter((value) => value !== id) : [...selected, id]);
   }
 
+  const visible = query.trim() ? items.filter((item) => matchesSearch(item, query)) : items;
   const tileSize = (width - Spacing.three * 2 - Spacing.two * (COLUMNS - 1)) / COLUMNS;
 
   return (
     <FlatList
-      data={items}
+      data={visible}
       keyExtractor={(item) => String(item.id)}
       numColumns={COLUMNS}
       contentContainerStyle={styles.grid}
       columnWrapperStyle={styles.gridRow}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
       ListHeaderComponent={
-        <View>
+        <View style={styles.header}>
           {header}
+          <TextField
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search by name, brand, color…"
+            autoCorrect={false}
+            clearButtonMode="while-editing"
+            returnKeyType="search"
+            accessibilityLabel="Search wardrobe"
+          />
           <View style={styles.chips}>
             <CategoryChips selected={category} onSelect={setCategory} />
           </View>
@@ -56,9 +71,11 @@ export function ItemSelectGrid({ selected, onChange, header }: Props) {
       }
       ListEmptyComponent={
         <ThemedText themeColor="textSecondary" style={styles.empty}>
-          {category
-            ? `No ${category.toLowerCase()} in your wardrobe`
-            : 'Add items to your wardrobe first'}
+          {query.trim()
+            ? 'Nothing matches. Try another word.'
+            : category
+              ? `No ${category.toLowerCase()} in your wardrobe`
+              : 'Add items to your wardrobe first'}
         </ThemedText>
       }
       renderItem={({ item }) => {
@@ -68,7 +85,7 @@ export function ItemSelectGrid({ selected, onChange, header }: Props) {
           <Pressable
             accessibilityRole="checkbox"
             accessibilityState={{ checked: isSelected }}
-            accessibilityLabel={item.name}
+            accessibilityLabel={isSelected ? `${item.name}, number ${order + 1}` : item.name}
             onPress={() => toggle(item.id)}
             style={{ width: tileSize }}>
             <ItemPhoto
@@ -108,6 +125,9 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   gridRow: {
+    gap: Spacing.two,
+  },
+  header: {
     gap: Spacing.two,
   },
   chips: {

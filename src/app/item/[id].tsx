@@ -285,7 +285,9 @@ export default function ItemScreen() {
                   key={other.id}
                   href={{ pathname: '/item/[id]', params: { id: other.id } }}
                   asChild>
-                  <Pressable accessibilityLabel={other.name} style={styles.pair}>
+                  <Pressable
+                    accessibilityLabel={other.name}
+                    style={({ pressed }) => [styles.pair, pressed && styles.pressed]}>
                     <ItemPhoto photo={other.photo} name={other.name} style={styles.pairPhoto} />
                     <ThemedText type="small" numberOfLines={1}>
                       {other.name}
@@ -375,6 +377,9 @@ const styles = StyleSheet.create({
   pair: {
     flex: 1,
     maxWidth: '33%',
+  },
+  pressed: {
+    opacity: 0.7,
   },
   pairPhoto: {
     width: '100%',

@@ -1,7 +1,7 @@
 import { Link, router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { ItemPhoto } from '@/components/item-photo';
@@ -52,6 +52,15 @@ export default function CalendarScreen() {
     });
   }
 
+  const now = new Date();
+  const showingToday =
+    selected === today && cursor.year === now.getFullYear() && cursor.month === now.getMonth();
+
+  function goToToday() {
+    setSelected(today);
+    setCursor({ year: now.getFullYear(), month: now.getMonth() });
+  }
+
   const isPastOrToday = selected <= today;
   const isFutureOrToday = selected >= today;
 
@@ -70,9 +79,14 @@ export default function CalendarScreen() {
           onSelect={setSelected}
         />
 
-        <ThemedText type="subtitle" style={styles.dayTitle}>
-          {selected === today ? 'Today' : formatDay(selected)}
-        </ThemedText>
+        <View style={styles.dayTitle}>
+          <ThemedText type="subtitle" style={styles.flex}>
+            {selected === today ? 'Today' : formatDay(selected)}
+          </ThemedText>
+          {!showingToday && (
+            <Button label="Back to today" onPress={goToToday} variant="plain" grow={false} />
+          )}
+        </View>
 
         {detail?.plans.map((plan) => (
           <View
@@ -90,7 +104,7 @@ export default function CalendarScreen() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`Wore ${plan.name}`}
-                hitSlop={8}
+                style={styles.cardAction}
                 onPress={() =>
                   run(async () => {
                     await logOutfitWear(db, plan.outfitId, selected);
@@ -106,7 +120,7 @@ export default function CalendarScreen() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Remove plan ${plan.name}`}
-              hitSlop={8}
+              style={styles.cardAction}
               onPress={() =>
                 run(async () => {
                   await removePlan(db, plan.planId);
@@ -135,12 +149,24 @@ export default function CalendarScreen() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Remove wear of ${outfit.name}`}
-              hitSlop={8}
+              style={styles.cardAction}
               onPress={() =>
-                run(async () => {
-                  await removeOutfitWear(db, outfit.wearId);
-                  load();
-                })
+                Alert.alert(
+                  'Remove this wear?',
+                  `${outfit.name} and its items will count one less wear.`,
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Remove',
+                      style: 'destructive',
+                      onPress: () =>
+                        run(async () => {
+                          await removeOutfitWear(db, outfit.wearId);
+                          load();
+                        }),
+                    },
+                  ],
+                )
               }>
               <ThemedText type="small" themeColor="textSecondary">
                 Remove
@@ -159,7 +185,9 @@ export default function CalendarScreen() {
                 key={item.id}
                 href={{ pathname: '/item/[id]', params: { id: item.id } }}
                 asChild>
-                <Pressable accessibilityLabel={item.name} style={styles.item}>
+                <Pressable
+                  accessibilityLabel={item.name}
+                  style={({ pressed }) => [styles.item, pressed && styles.pressed]}>
                   <ItemPhoto photo={item.photo} name={item.name} style={styles.itemPhoto} />
                   <ThemedText type="small" numberOfLines={1}>
                     {item.name}
@@ -210,17 +238,31 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.six,
   },
   dayTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginTop: Spacing.two,
+    marginRight: -Spacing.three,
+  },
+  flex: {
+    flex: 1,
+  },
+  cardAction: {
+    minHeight: 44,
+    minWidth: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.three,
     borderRadius: Radius.medium,
-    padding: Spacing.three,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.one,
   },
   cardText: {
     flex: 1,
+    paddingVertical: Spacing.two,
   },
   items: {
     gap: Spacing.two,
@@ -233,6 +275,9 @@ const styles = StyleSheet.create({
     height: 100,
     borderRadius: Radius.small,
     marginBottom: Spacing.one,
+  },
+  pressed: {
+    opacity: 0.7,
   },
   actions: {
     flexDirection: 'row',

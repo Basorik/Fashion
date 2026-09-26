@@ -3,6 +3,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 
+import { Button } from '@/components/button';
 import { OutfitCollage } from '@/components/outfit-collage';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -61,9 +62,17 @@ export default function PickOutfitScreen() {
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           outfits === null ? null : (
-            <ThemedText themeColor="textSecondary" style={styles.empty}>
-              Create an outfit on the Outfits tab first.
-            </ThemedText>
+            <View style={styles.empty}>
+              <ThemedText themeColor="textSecondary" style={styles.center}>
+                You haven&apos;t saved any outfits yet.
+              </ThemedText>
+              <Button
+                label="Create an outfit"
+                onPress={() => router.replace('/new-outfit')}
+                variant="primary"
+                grow={false}
+              />
+            </View>
           )
         }
         renderItem={({ item: outfit }) => (
@@ -108,7 +117,11 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   empty: {
-    textAlign: 'center',
+    alignItems: 'center',
+    gap: Spacing.three,
     paddingTop: Spacing.five,
+  },
+  center: {
+    textAlign: 'center',
   },
 });

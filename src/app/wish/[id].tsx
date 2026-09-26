@@ -130,7 +130,9 @@ export default function WishScreen() {
         <View style={styles.grid}>
           {matches.map((item) => (
             <Link key={item.id} href={{ pathname: '/item/[id]', params: { id: item.id } }} asChild>
-              <Pressable accessibilityLabel={item.name} style={styles.match}>
+              <Pressable
+                accessibilityLabel={item.name}
+                style={({ pressed }) => [styles.match, pressed && styles.pressed]}>
                 <ItemPhoto photo={item.photo} name={item.name} style={styles.matchPhoto} />
                 <ThemedText type="small" numberOfLines={1}>
                   {item.name}
@@ -182,6 +184,9 @@ const styles = StyleSheet.create({
   },
   match: {
     width: '31%',
+  },
+  pressed: {
+    opacity: 0.7,
   },
   matchPhoto: {
     width: '100%',

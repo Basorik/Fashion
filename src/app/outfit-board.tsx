@@ -10,6 +10,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useBusy } from '@/hooks/use-busy';
+import { useDiscardGuard } from '@/hooks/use-discard-guard';
 import { getBoard, saveBoard, type BoardPiece } from '@/lib/board';
 import { successFeedback } from '@/lib/haptics';
 
@@ -21,6 +22,8 @@ export default function OutfitBoardScreen() {
   const { width } = useWindowDimensions();
   const [pieces, setPieces] = useState<BoardPiece[] | null>(null);
   const [saving, run] = useBusy();
+  const [moved, setMoved] = useState(false);
+  const leave = useDiscardGuard(moved);
 
   useEffect(() => {
     getBoard(db, outfitId).then(({ pieces: loaded }) => setPieces(loaded));
@@ -29,12 +32,14 @@ export default function OutfitBoardScreen() {
   const size = width - Spacing.three * 2;
 
   function update(changed: BoardPiece) {
+    setMoved(true);
     setPieces(
       (current) => current?.map((piece) => (piece.id === changed.id ? changed : piece)) ?? null,
     );
   }
 
   function bringToFront(pieceId: number) {
+    setMoved(true);
     setPieces((current) => {
       if (!current) return current;
       const piece = current.find((entry) => entry.id === pieceId);
@@ -47,7 +52,7 @@ export default function OutfitBoardScreen() {
     run(async () => {
       await saveBoard(db, outfitId, pieces);
       successFeedback();
-      router.back();
+      leave(() => router.back());
     }, 'Could not save layout');
   }
 
