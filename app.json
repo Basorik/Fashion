@@ -57,7 +57,8 @@
         {
           "locationWhenInUsePermission": "Bella uses your location to check the local weather for outfit suggestions."
         }
-      ]
+      ],
+      "./modules/bella-vision/app.plugin.js"
     ],
     "experiments": {
       "typedRoutes": true,
