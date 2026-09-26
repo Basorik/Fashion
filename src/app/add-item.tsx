@@ -8,6 +8,7 @@ import { ActivityIndicator, Alert, ScrollView, StyleSheet, View } from 'react-na
 import { BarcodeScanner } from '@/components/barcode-scanner';
 import { Button } from '@/components/button';
 import { CategoryChips } from '@/components/category-chips';
+import { DateField } from '@/components/date-field';
 import { FooterBar } from '@/components/footer-bar';
 import { PhotoChoices } from '@/components/photo-choices';
 import { TagPicker } from '@/components/tag-picker';
@@ -502,24 +503,16 @@ export default function ItemFormScreen() {
 
         {!isWish && (
           <>
-            <View style={styles.row}>
-              <View style={styles.flex}>
-                <Field label="Bought at">
-                  <TextField value={store} onChangeText={setStore} placeholder="Optional" />
-                </Field>
-              </View>
-              <View style={styles.flex}>
-                <Field label="Bought on">
-                  <TextField
-                    value={purchasedOn}
-                    onChangeText={setPurchasedOn}
-                    placeholder="YYYY-MM-DD"
-                    keyboardType="numbers-and-punctuation"
-                    autoCorrect={false}
-                  />
-                </Field>
-              </View>
-            </View>
+            <Field label="Bought at">
+              <TextField value={store} onChangeText={setStore} placeholder="Optional" />
+            </Field>
+            <Field label="Bought on">
+              <DateField
+                value={purchasedOn}
+                onChange={setPurchasedOn}
+                accessibilityLabel="Bought on"
+              />
+            </Field>
             {!purchasedOnIsValid && (
               <ThemedText type="small" themeColor="danger">
                 Enter a past date like {today()}
