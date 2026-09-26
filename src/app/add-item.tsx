@@ -19,6 +19,7 @@ import { lookupBarcode } from '@/lib/barcode';
 import { extractLink, importFromLink } from '@/lib/link-import';
 import { inferCategory, inferTags, mergeTags, type ProductText } from '@/lib/tag-inference';
 import { addItem, getItem, listItemTags, updateItem } from '@/lib/db';
+import { photoColorTags } from '@/lib/photo-colors';
 import { deletePhoto, photoUri, savePhoto } from '@/lib/photos';
 import { addWish, getWish, listWishTags, updateWish } from '@/lib/wishlist';
 
@@ -125,6 +126,20 @@ export default function ItemFormScreen() {
     setLookupMessage(`Filled in from the link${added}. Check the details before saving.`);
   }
 
+  // Sets a new photo and, when the item has no color yet, tags its main colors.
+  async function applyPhoto(uri: string) {
+    setPhoto({ uri });
+    if (tags.some((tag) => tag.group === 'Color')) return;
+    const colors = await photoColorTags(uri);
+    if (colors.length === 0) return;
+    setTags((current) =>
+      current.some((tag) => tag.group === 'Color') ? current : mergeTags(current, colors),
+    );
+    setLookupMessage(
+      `Tagged ${colors.map((tag) => tag.value.toLowerCase()).join(' and ')} from the photo. Change it below if it's wrong.`,
+    );
+  }
+
   async function takePhoto() {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
@@ -132,12 +147,12 @@ export default function ItemFormScreen() {
       return;
     }
     const result = await ImagePicker.launchCameraAsync(pickerOptions);
-    if (!result.canceled) setPhoto({ uri: result.assets[0].uri });
+    if (!result.canceled) applyPhoto(result.assets[0].uri);
   }
 
   async function choosePhoto() {
     const result = await ImagePicker.launchImageLibraryAsync(pickerOptions);
-    if (!result.canceled) setPhoto({ uri: result.assets[0].uri });
+    if (!result.canceled) applyPhoto(result.assets[0].uri);
   }
 
   async function handleScanned(code: string) {
