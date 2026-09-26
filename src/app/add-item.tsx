@@ -3,7 +3,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, View } from 'react-native';
 
 import { BarcodeScanner } from '@/components/barcode-scanner';
 import { Button } from '@/components/button';
@@ -163,7 +163,12 @@ export default function ItemFormScreen() {
           blocked:
             'This shop blocks apps from reading its pages. Fill the details in below, or save the product photo and add it from your library.',
           'no-data': "Couldn't find product details on that page. Fill them in below.",
-          network: "Couldn't open that link. Check your connection and try again.",
+          // Browsers only let a site read another site's pages when that site allows it,
+          // and most shops don't, so on the web this is the usual outcome.
+          network:
+            Platform.OS === 'web'
+              ? "Your browser won't let Bella read this shop's page. Fill the details in below, or save the product photo and add it from your library. Importing links works in the phone app."
+              : "Couldn't open that link. Check your connection and try again.",
         }[result.reason],
       );
       return;

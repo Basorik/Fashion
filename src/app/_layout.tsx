@@ -1,12 +1,14 @@
 import * as Notifications from 'expo-notifications';
 import { DarkTheme, DefaultTheme, router, Stack, ThemeProvider, type Theme } from 'expo-router';
-import { SQLiteProvider } from 'expo-sqlite';
+import { SQLiteProvider, type SQLiteDatabase } from 'expo-sqlite';
 import { useEffect } from 'react';
 import { Platform, useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { Colors } from '@/constants/theme';
 import { DATABASE_NAME, migrate } from '@/lib/db';
+import { loadPhotos } from '@/lib/photos';
+import '@/lib/web-alert';
 import { useShareIntake } from '@/lib/share-intake';
 
 // Headers, tab bars and screen backgrounds in Bella's colors.
@@ -26,6 +28,17 @@ function navigationTheme(scheme: 'light' | 'dark'): Theme {
     },
   };
 }
+
+async function prepare(db: SQLiteDatabase) {
+  await migrate(db);
+  await loadPhotos();
+}
+
+// Opening a screen straight from its web address (a refresh or bookmark) puts
+// the tabs underneath it, so its back and close buttons have somewhere to go.
+export const unstable_settings = {
+  initialRouteName: '(tabs)',
+};
 
 const themes = { light: navigationTheme('light'), dark: navigationTheme('dark') };
 
@@ -65,7 +78,7 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider value={colorScheme === 'dark' ? themes.dark : themes.light}>
-        <SQLiteProvider databaseName={DATABASE_NAME} onInit={migrate}>
+        <SQLiteProvider databaseName={DATABASE_NAME} onInit={prepare}>
           <Stack
             screenOptions={{ headerShadowVisible: false, headerBackButtonDisplayMode: 'minimal' }}>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

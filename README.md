@@ -25,7 +25,7 @@ Built with [Expo](https://expo.dev) (React Native + TypeScript) and Expo Router.
 - **Wishlist**: save things you're thinking of buying (from a link or by hand), ranked by how many items you own each would go with, based on category, style, season and color. "I bought it" moves an entry into your wardrobe.
 - **Packing lists**: create a trip with dates, add outfits or single items, and tick them off as you pack.
 
-Everything is stored on the device: items, outfits and wear history in SQLite (`expo-sqlite`), photos in the app's document folder (`expo-file-system`).
+Everything is stored on the device: items, outfits and wear history in SQLite (`expo-sqlite`), photos in the app's document folder (`expo-file-system`), or in the browser's storage on the web.
 
 ## Roadmap
 
@@ -41,7 +41,21 @@ npm install
 npx expo start
 ```
 
-Scan the QR code with the Expo Go app on your phone (iOS or Android). The web target isn't set up yet, because `expo-sqlite` on web needs extra bundler and header configuration.
+Scan the QR code with the Expo Go app on your phone (iOS or Android), or press `w` to open it in your browser.
+
+### Web version
+
+`npx expo start --web` (or `w` in the running dev server) opens Bella in the browser. Everything stays in that browser's storage for the site: the database in SQLite (WebAssembly, saved to the browser's private file storage) and photos in IndexedDB. Nothing is uploaded. Data doesn't move between browsers or to the phone by itself; use Backup to carry it over (backups are the same file on web and phone).
+
+`npx expo export -p web` builds a static site in `dist/` that any static host can serve. The host should send `index.html` for unknown paths and, as `metro.config.js` does for the dev server, the `Cross-Origin-Embedder-Policy: credentialless` and `Cross-Origin-Opener-Policy: same-origin` headers that `expo-sqlite` recommends.
+
+On the web:
+- Background removal isn't available (it uses the phone's own Apple Vision or ML Kit), so photos keep their background. Color tags from the photo still work.
+- Daily wear reminders aren't offered.
+- Most shops don't let a browser read their pages, so importing from a link usually fails and asks you to fill the details in.
+- Barcode scanning uses the computer's camera where the browser allows it.
+- Backups download as a file, and restore from a file you pick.
+- Clearing the site's data in the browser deletes the wardrobe, so keep a backup.
 
 ### Development build (for background removal)
 
