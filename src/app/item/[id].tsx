@@ -13,13 +13,15 @@ import { ThemedView } from '@/components/themed-view';
 import type { Tag } from '@/constants/tags';
 import { Radius, Spacing } from '@/constants/theme';
 import { useBusy } from '@/hooks/use-busy';
-import { formatRelativeDay } from '@/lib/dates';
+import { useTheme } from '@/hooks/use-theme';
+import { formatDay, formatRelativeDay } from '@/lib/dates';
 import {
   deleteItem,
   getItem,
   listItemTags,
   listWornWith,
   logWear,
+  restoreItem,
   today,
   undoWear,
   type ItemWithStats,
@@ -31,6 +33,7 @@ export default function ItemScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const itemId = Number(id);
   const db = useSQLiteContext();
+  const theme = useTheme();
   const [item, setItem] = useState<ItemWithStats | null>(null);
   const [tags, setTags] = useState<Tag[]>([]);
   const [wornWith, setWornWith] = useState<Awaited<ReturnType<typeof listWornWith>>>([]);
@@ -62,8 +65,15 @@ export default function ItemScreen() {
     });
   }
 
+  function restore() {
+    run(async () => {
+      await restoreItem(db, current.id);
+      load();
+    });
+  }
+
   function confirmDelete() {
-    Alert.alert('Delete item?', `${current.name} and its wear history will be removed.`, [
+    Alert.alert('Delete for good?', `${current.name} and its wear history will be deleted.`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -101,10 +111,27 @@ export default function ItemScreen() {
           <ThemedText type="title">{current.name}</ThemedText>
         </View>
 
+        {current.removedOn && (
+          <View style={[styles.removed, { backgroundColor: theme.backgroundElement }]}>
+            <ThemedText type="smallBold">
+              Removed {formatDay(current.removedOn)}
+              {current.removedReason ? ` · ${current.removedReason}` : ''}
+            </ThemedText>
+            {current.removedNote && (
+              <ThemedText type="small" themeColor="textSecondary">
+                {current.removedNote}
+              </ThemedText>
+            )}
+          </View>
+        )}
+
         {tags.length > 0 && (
           <View style={styles.tags}>
             {tags.map((tag) => (
-              <Chip key={`${tag.group}:${tag.value}`} label={tag.value} />
+              <Chip
+                key={`${tag.group}:${tag.value}`}
+                label={tag.group === 'Color season' ? `${tag.value} palette` : tag.value}
+              />
             ))}
           </View>
         )}
@@ -128,12 +155,16 @@ export default function ItemScreen() {
         </View>
 
         <View style={styles.row}>
-          <Button
-            label={woreToday ? 'Worn today · Undo' : 'I wore this today'}
-            onPress={toggleWear}
-            busy={busy}
-            variant={woreToday ? 'secondary' : 'primary'}
-          />
+          {current.removedOn ? (
+            <Button label="Put back in wardrobe" onPress={restore} busy={busy} />
+          ) : (
+            <Button
+              label={woreToday ? 'Worn today · Undo' : 'I wore this today'}
+              onPress={toggleWear}
+              busy={busy}
+              variant={woreToday ? 'secondary' : 'primary'}
+            />
+          )}
         </View>
 
         {wornWith.length > 0 && (
@@ -162,7 +193,15 @@ export default function ItemScreen() {
           </View>
         )}
 
-        <Button label="Delete item" onPress={confirmDelete} variant="danger" />
+        {current.removedOn ? (
+          <Button label="Delete for good" onPress={confirmDelete} variant="danger" />
+        ) : (
+          <Button
+            label="Remove from wardrobe"
+            onPress={() => router.push({ pathname: '/remove-item', params: { id: current.id } })}
+            variant="danger"
+          />
+        )}
       </ScrollView>
     </ThemedView>
   );
@@ -183,6 +222,11 @@ const styles = StyleSheet.create({
     borderRadius: Radius.large,
   },
   heading: {
+    gap: Spacing.one,
+  },
+  removed: {
+    borderRadius: Radius.medium,
+    padding: Spacing.three,
     gap: Spacing.one,
   },
   stats: {

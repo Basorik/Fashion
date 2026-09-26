@@ -8,6 +8,8 @@ type RankedItem = Pick<Item, 'id' | 'name' | 'photo'> & {
   lastWorn: string | null;
 };
 
+// Counts only items still in the wardrobe, except spending, which includes
+// items since removed because the money was spent either way.
 export type WardrobeStats = {
   itemCount: number;
   outfitCount: number;
@@ -28,6 +30,7 @@ const rankedQuery = `
   SELECT items.id, items.name, items.photo,
     COUNT(wears.id) AS wearCount, MAX(wears.worn_on) AS lastWorn
   FROM items LEFT JOIN wears ON wears.item_id = items.id
+  WHERE items.removed_on IS NULL
   GROUP BY items.id
 `;
 
@@ -42,12 +45,12 @@ export async function getWardrobeStats(db: SQLiteDatabase): Promise<WardrobeStat
       pricedWears: number;
     }>(
       `SELECT
-        (SELECT COUNT(*) FROM items) AS itemCount,
+        (SELECT COUNT(*) FROM items WHERE removed_on IS NULL) AS itemCount,
         (SELECT COUNT(*) FROM outfits) AS outfitCount,
         (SELECT COUNT(DISTINCT worn_on) FROM wears WHERE worn_on > ?) AS wearsLast30Days,
-        (SELECT SUM(price) FROM items) AS totalValue,
+        (SELECT SUM(price) FROM items WHERE removed_on IS NULL) AS totalValue,
         (SELECT COUNT(*) FROM wears JOIN items ON items.id = wears.item_id
-          WHERE items.price IS NOT NULL) AS pricedWears`,
+          WHERE items.price IS NOT NULL AND items.removed_on IS NULL) AS pricedWears`,
       addDays(now, -30),
     ),
     db.getAllAsync<RankedItem>(
@@ -58,11 +61,14 @@ export async function getWardrobeStats(db: SQLiteDatabase): Promise<WardrobeStat
       `${rankedQuery} ORDER BY lastWorn IS NOT NULL, lastWorn ASC, wearCount ASC LIMIT 5`,
     ),
     db.getAllAsync<{ label: string; count: number }>(
-      'SELECT category AS label, COUNT(*) AS count FROM items GROUP BY category ORDER BY count DESC',
+      `SELECT category AS label, COUNT(*) AS count FROM items WHERE removed_on IS NULL
+       GROUP BY category ORDER BY count DESC`,
     ),
     db.getAllAsync<{ label: string; count: number }>(
       `SELECT value AS label, COUNT(*) AS count FROM item_tags
-       WHERE tag_group = 'Color' GROUP BY value ORDER BY count DESC LIMIT 8`,
+       JOIN items ON items.id = item_tags.item_id
+       WHERE tag_group = 'Color' AND items.removed_on IS NULL
+       GROUP BY value ORDER BY count DESC LIMIT 8`,
     ),
     db.getAllAsync<{ label: string; amount: number }>(
       `SELECT substr(created_at, 1, 7) AS label, SUM(price) AS amount FROM items
@@ -71,8 +77,10 @@ export async function getWardrobeStats(db: SQLiteDatabase): Promise<WardrobeStat
       addDays(now, -365),
     ),
     db.getFirstAsync<{ share: number | null }>(
-      `SELECT CAST(COUNT(DISTINCT wears.item_id) AS REAL) / NULLIF((SELECT COUNT(*) FROM items), 0) AS share
-       FROM wears WHERE worn_on > ?`,
+      `SELECT CAST(COUNT(DISTINCT wears.item_id) AS REAL) /
+         NULLIF((SELECT COUNT(*) FROM items WHERE removed_on IS NULL), 0) AS share
+       FROM wears JOIN items ON items.id = wears.item_id
+       WHERE worn_on > ? AND items.removed_on IS NULL`,
       addDays(now, -90),
     ),
   ]);
