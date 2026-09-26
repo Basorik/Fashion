@@ -7,8 +7,6 @@ import android.graphics.Matrix
 import android.media.ExifInterface
 import android.net.Uri
 import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.label.ImageLabeling
-import com.google.mlkit.vision.label.defaults.ImageLabelerOptions
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmentation
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions
 import expo.modules.kotlin.Promise
@@ -21,10 +19,8 @@ import java.io.FileOutputStream
 import java.util.UUID
 
 private const val MAX_SIDE = 1600
-private const val MIN_LABEL_CONFIDENCE = 0.4f
-private const val MAX_LABELS = 20
 
-// On-device photo tools for Bella, built on Google ML Kit.
+// On-device background removal for Bella, built on Google ML Kit.
 class BellaVisionModule : Module() {
   private val context: Context
     get() = appContext.reactContext ?: throw Exceptions.ReactContextLost()
@@ -32,12 +28,6 @@ class BellaVisionModule : Module() {
   private val segmenter by lazy {
     SubjectSegmentation.getClient(
       SubjectSegmenterOptions.Builder().enableForegroundBitmap().build()
-    )
-  }
-
-  private val labeler by lazy {
-    ImageLabeling.getClient(
-      ImageLabelerOptions.Builder().setConfidenceThreshold(MIN_LABEL_CONFIDENCE).build()
     )
   }
 
@@ -66,20 +56,6 @@ class BellaVisionModule : Module() {
           }
         }
         .addOnFailureListener { promise.reject(SegmentationFailedException(it)) }
-    }
-
-    // Names what's in the photo (like "Jeans" or "Denim"), most likely first.
-    AsyncFunction("labelImageAsync") { uri: String, promise: Promise ->
-      labeler.process(InputImage.fromBitmap(loadBitmap(uri), 0))
-        .addOnSuccessListener { labels ->
-          promise.resolve(
-            labels
-              .sortedByDescending { it.confidence }
-              .take(MAX_LABELS)
-              .map { mapOf("label" to it.text, "confidence" to it.confidence.toDouble()) }
-          )
-        }
-        .addOnFailureListener { promise.reject(LabelingFailedException(it)) }
     }
   }
 
@@ -146,6 +122,3 @@ internal class ImageWriteException(cause: Throwable) :
 
 internal class SegmentationFailedException(cause: Throwable) :
   CodedException("Background removal failed: ${cause.message}", cause)
-
-internal class LabelingFailedException(cause: Throwable) :
-  CodedException("Labeling the photo failed: ${cause.message}", cause)

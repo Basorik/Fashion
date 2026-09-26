@@ -2,7 +2,7 @@ import CoreImage
 import ExpoModulesCore
 import Vision
 
-// On-device photo tools for Bella, built on Apple's Vision framework.
+// On-device background removal for Bella, built on Apple's Vision framework.
 public class BellaVisionModule: Module {
   public func definition() -> ModuleDefinition {
     Name("BellaVision")
@@ -49,27 +49,10 @@ public class BellaVisionModule: Module {
       try png.write(to: output)
       return output.absoluteString
     }
-
-    // Names what's in the photo (like "jeans" or "sneaker"), most likely first.
-    AsyncFunction("labelImageAsync") { (uri: URL) throws -> [[String: Any]] in
-      let request = VNClassifyImageRequest()
-      try VNImageRequestHandler(ciImage: try loadImage(uri)).perform([request])
-      return (request.results ?? [])
-        .filter { $0.confidence >= minLabelConfidence }
-        .prefix(maxLabels)
-        .map {
-          [
-            "label": $0.identifier.replacingOccurrences(of: "_", with: " "),
-            "confidence": Double($0.confidence),
-          ]
-        }
-    }
   }
 }
 
 private let maxOutputSide: CGFloat = 1600
-private let minLabelConfidence: Float = 0.1
-private let maxLabels = 20
 
 // Loads the photo upright, following its EXIF orientation.
 private func loadImage(_ uri: URL) throws -> CIImage {

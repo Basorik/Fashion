@@ -1,1 +1,1 @@
-export { default, type ImageLabel } from './src/BellaVisionModule';
+export { default } from './src/BellaVisionModule';

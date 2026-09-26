@@ -20,6 +20,4 @@ android {
 dependencies {
   // Cut-outs: runs in Google Play services, which downloads the model (see AndroidManifest.xml).
   implementation 'com.google.android.gms:play-services-mlkit-subject-segmentation:16.0.0-beta1'
-  // Labels: the model ships inside the app, so it works offline from the first launch.
-  implementation 'com.google.mlkit:image-labeling:17.0.9'
 }

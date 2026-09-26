@@ -10,8 +10,8 @@ Built with [Expo](https://expo.dev) (React Native + TypeScript) and Expo Router.
 - **Add an item** three ways: from a photo (camera or library), by scanning its barcode, or by hand with just a name. Photo, brand and price are optional.
 - **Tags**: describe items by color, style, season, material and pattern, from presets or your own tags.
 - **Barcode lookup**: scanning a UPC/EAN code looks the product up in [UPCitemdb](https://www.upcitemdb.com)'s free trial API (about 100 lookups a day, no key) and fills in the name, brand, color and product photo when it finds a match. Clothing coverage is patchy, so a miss just leaves the form for you to fill.
-- **Photo tools, on the phone** (development build only, see below): a new photo has its background removed automatically, with a button to keep the original. Any photo can be cut out later from the edit screen. The app also labels what's in the photo and uses that to pick the category and suggest material, pattern, style and season tags. Cut-outs are shown whole in the wardrobe, outfits and on the outfit board. iOS uses Apple Vision (background removal needs iOS 17 or later); Android uses Google ML Kit. No photo leaves the phone.
-- **Color tags from the photo** work everywhere, including Expo Go.
+- **Background removal, on the phone** (development build only, see below): a new photo has its background removed automatically, with a button to keep the original. Any photo can be cut out later from the edit screen. Cut-outs are shown whole in the wardrobe, outfits and on the outfit board. iOS uses Apple Vision (iOS 17 or later); Android uses Google ML Kit. No photo leaves the phone.
+- **Color tags from the photo** work everywhere, including Expo Go. With a cut-out, only the item's own pixels count.
 - **Import from a link**: paste a shop's product page link to fill in the name, brand, price and photo (read from the page's JSON-LD or Open Graph tags).
 - **Edit** any item from its page.
 - **Item page**: tap "I wore this today" to log a wear (tap again to undo). Shows times worn, last worn, cost per wear when a price is set, and the items it's most often worn with. Items can be deleted.
@@ -42,9 +42,9 @@ npx expo start
 
 Scan the QR code with the Expo Go app on your phone (iOS or Android). The web target isn't set up yet, because `expo-sqlite` on web needs extra bundler and header configuration.
 
-### Development build (for the photo tools)
+### Development build (for background removal)
 
-Background removal and photo labels are native code in `modules/bella-vision`, which Expo Go doesn't include. Everything else still runs in Expo Go, where those buttons simply don't appear. To try them, build the app once with [EAS](https://docs.expo.dev/develop/development-builds/create-a-build/):
+Background removal is native code in `modules/bella-vision`, which Expo Go doesn't include. Everything else still runs in Expo Go, where the background removal buttons simply don't appear. To try them, build the app once with [EAS](https://docs.expo.dev/develop/development-builds/create-a-build/):
 
 ```bash
 npm install
@@ -78,6 +78,6 @@ src/lib/db.ts       SQLite schema, migrations, item and outfit queries
 src/lib/*.ts        calendar, stats, wishlist, trips, board, weather, suggestions,
                     barcode and link import
 src/lib/photos.ts   saving and loading item photos
-src/lib/photo-ai.ts background removal and photo labels, turned into tags
+src/lib/photo-ai.ts background removal
 modules/bella-vision/  native module: Apple Vision (iOS) and ML Kit (Android)
 ```
