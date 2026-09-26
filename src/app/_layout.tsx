@@ -1,6 +1,8 @@
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider, type Theme } from 'expo-router';
+import * as Notifications from 'expo-notifications';
+import { DarkTheme, DefaultTheme, router, Stack, ThemeProvider, type Theme } from 'expo-router';
 import { SQLiteProvider } from 'expo-sqlite';
-import { useColorScheme } from 'react-native';
+import { useEffect } from 'react';
+import { Platform, useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { Colors } from '@/constants/theme';
@@ -26,8 +28,38 @@ function navigationTheme(scheme: 'light' | 'dark'): Theme {
 
 const themes = { light: navigationTheme('light'), dark: navigationTheme('dark') };
 
+if (Platform.OS !== 'web') {
+  // Show the wear reminder even when Bella is open.
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldPlaySound: false,
+      shouldSetBadge: false,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+}
+
+// Opens the screen a tapped notification points at (the wear reminder opens "Log what you wore").
+function useNotificationLinks() {
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    function open(notification: Notifications.Notification) {
+      const url = notification.request.content.data?.url;
+      if (typeof url === 'string') router.push(url as never);
+    }
+    const last = Notifications.getLastNotificationResponse();
+    if (last?.notification) open(last.notification);
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) =>
+      open(response.notification),
+    );
+    return () => subscription.remove();
+  }, []);
+}
+
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  useNotificationLinks();
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider value={colorScheme === 'dark' ? themes.dark : themes.light}>
@@ -42,6 +74,10 @@ export default function RootLayout() {
               options={{ title: 'New outfit', presentation: 'modal' }}
             />
             <Stack.Screen name="outfit/[id]" options={{ title: '' }} />
+            <Stack.Screen
+              name="log-wear"
+              options={{ title: 'What did you wear?', presentation: 'modal' }}
+            />
             <Stack.Screen
               name="shuffle"
               options={{ title: 'Shuffle an outfit', presentation: 'modal' }}

@@ -18,7 +18,12 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: 'Wardrobe',
-          headerRight: () => <AddButton href="/add-item" label="Add item" />,
+          headerRight: () => (
+            <View style={styles.headerButtons}>
+              <HeaderTextButton href="/log-wear" label="Log wear" />
+              <AddButton href="/add-item" label="Add item" />
+            </View>
+          ),
           tabBarIcon: tabIcon({ ios: 'tshirt', android: 'checkroom', web: 'checkroom' }),
         }}
       />

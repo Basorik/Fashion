@@ -387,6 +387,30 @@ export async function undoWear(db: SQLiteDatabase, itemId: number, wornOn = toda
   );
 }
 
+export async function listWornOn(db: SQLiteDatabase, wornOn: string) {
+  const rows = await db.getAllAsync<{ itemId: number }>(
+    'SELECT DISTINCT item_id AS itemId FROM wears WHERE worn_on = ? ORDER BY id',
+    wornOn,
+  );
+  return rows.map((row) => row.itemId);
+}
+
+// Makes the items worn on `wornOn` exactly `itemIds`: logs the new ones and
+// undoes wears for items taken off the list.
+export async function setWornOn(db: SQLiteDatabase, wornOn: string, itemIds: number[]) {
+  await db.withTransactionAsync(async () => {
+    const before = await listWornOn(db, wornOn);
+    for (const itemId of itemIds) {
+      if (!before.includes(itemId)) await logWear(db, itemId, wornOn);
+    }
+    for (const itemId of before) {
+      if (!itemIds.includes(itemId)) {
+        await db.runAsync('DELETE FROM wears WHERE item_id = ? AND worn_on = ?', itemId, wornOn);
+      }
+    }
+  });
+}
+
 // Items most often worn on the same day as this one, whether logged as an outfit or not.
 export function listWornWith(db: SQLiteDatabase, itemId: number, limit = 3) {
   return db.getAllAsync<Pick<Item, 'id' | 'name' | 'photo'> & { times: number }>(

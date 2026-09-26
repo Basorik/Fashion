@@ -63,6 +63,12 @@
           "locationWhenInUsePermission": "Bella uses your location to check the local weather for outfit suggestions."
         }
       ],
+      [
+        "expo-notifications",
+        {
+          "color": "#9E4636"
+        }
+      ],
       "./modules/bella-vision/app.plugin.js"
     ],
     "experiments": {
