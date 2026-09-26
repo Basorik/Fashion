@@ -1,6 +1,7 @@
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { decode } from 'jpeg-js';
 
+import type { ColorSeason } from '@/constants/color-seasons';
 import type { Tag } from '@/constants/tags';
 import { decodePng } from '@/lib/png';
 
@@ -49,14 +50,45 @@ export function colorName(rgb: Rgb): string {
   return 'Pink';
 }
 
+// Places one color in a color analysis season by its undertone (warm or cool),
+// depth and clarity: Spring is warm and bright, Autumn warm and deep or muted,
+// Summer cool and soft, Winter cool and deep or vivid.
+export function colorSeason([r, g, b]: Rgb): ColorSeason {
+  const max = Math.max(r, g, b) / 255;
+  const min = Math.min(r, g, b) / 255;
+  const chroma = max - min;
+  const saturation = max === 0 ? 0 : chroma / max;
+  const { hue } = toHsl([r, g, b]);
+  // A tint of yellow or red in a near-neutral makes it warm (ivory, greige).
+  const warmTint = r - b > 8;
+
+  if (max < 0.15) return 'Winter'; // black
+  if (chroma < 0.06 || saturation < 0.1) {
+    if (max > 0.92) return warmTint ? 'Spring' : 'Winter'; // cream or pure white
+    if (max < 0.4) return 'Winter'; // charcoal
+    return warmTint ? 'Autumn' : 'Summer'; // taupe or soft grey
+  }
+
+  const warm = hue >= 8 && hue < 140;
+  if (warm) return max >= 0.85 ? 'Spring' : 'Autumn';
+  return saturation >= 0.6 || max < 0.4 ? 'Winter' : 'Summer';
+}
+
 function distance(a: Rgb, b: Rgb) {
   return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 }
 
-// Finds the item's main colors in an RGBA pixel grid. The background is
-// estimated from the border pixels and excluded, then the remaining pixels
-// vote for preset colors. Returns up to two colors, most common first.
-export function dominantColors(rgba: ArrayLike<number>, width: number, height: number): string[] {
+function cutoutPixels(rgba: ArrayLike<number>, width: number, height: number) {
+  const colors: Rgb[] = [];
+  for (let index = 0; index < width * height * 4; index += 4) {
+    if (rgba[index + 3] >= 200) colors.push([rgba[index], rgba[index + 1], rgba[index + 2]]);
+  }
+  return colors;
+}
+
+// Pixels of the item in a photo with a background: the background is estimated
+// from the border pixels and excluded, and only the central area is read.
+function photoPixels(rgba: ArrayLike<number>, width: number, height: number) {
   const pixel = (x: number, y: number): Rgb => {
     const index = (y * width + x) * 4;
     return [rgba[index], rgba[index + 1], rgba[index + 2]];
@@ -80,37 +112,40 @@ export function dominantColors(rgba: ArrayLike<number>, width: number, height: n
       colors.push(color);
     }
   }
-  return topColors(colors);
+  return colors;
 }
 
-// The main colors of a cut-out: every solid pixel is the item, so all of them vote.
-export function dominantCutoutColors(
-  rgba: ArrayLike<number>,
-  width: number,
-  height: number,
-): string[] {
-  const colors: Rgb[] = [];
-  for (let index = 0; index < width * height * 4; index += 4) {
-    if (rgba[index + 3] >= 200) colors.push([rgba[index], rgba[index + 1], rgba[index + 2]]);
-  }
-  return topColors(colors);
-}
-
-// Up to two preset colors the pixels vote for, most common first.
+// Up to two preset colors the pixels vote for, most common first, each with the
+// average of the pixels that voted for it (the actual shade, for its season).
 function topColors(colors: Rgb[]) {
-  const votes = new Map<string, number>();
+  const votes = new Map<string, { count: number; sum: Rgb }>();
   for (const color of colors) {
     const name = colorName(color);
-    votes.set(name, (votes.get(name) ?? 0) + 1);
+    const entry = votes.get(name) ?? { count: 0, sum: [0, 0, 0] };
+    entry.count += 1;
+    entry.sum = [entry.sum[0] + color[0], entry.sum[1] + color[1], entry.sum[2] + color[2]];
+    votes.set(name, entry);
   }
   const counted = colors.length;
   if (counted === 0) return [];
 
-  const ranked = [...votes.entries()].sort((a, b) => b[1] - a[1]);
+  const ranked = [...votes.entries()].sort((a, b) => b[1].count - a[1].count);
   return ranked
-    .filter(([, count], index) => count / counted >= (index === 0 ? 0.3 : 0.25))
+    .filter(([, { count }], index) => count / counted >= (index === 0 ? 0.3 : 0.25))
     .slice(0, 2)
-    .map(([name]) => name);
+    .map(([name, { count, sum }]) => ({
+      name,
+      average: sum.map((total) => total / count) as Rgb,
+    }));
+}
+
+// Color tags for the main colors, plus the color seasons their shades belong to.
+function colorTags(colors: ReturnType<typeof topColors>): Tag[] {
+  const seasons = [...new Set(colors.map((color) => colorSeason(color.average)))];
+  return [
+    ...colors.map((color): Tag => ({ group: 'Color', value: color.name })),
+    ...seasons.map((value): Tag => ({ group: 'Color season', value })),
+  ];
 }
 
 function base64ToBytes(base64: string) {
@@ -131,9 +166,9 @@ function base64ToBytes(base64: string) {
   return bytes.subarray(0, byteIndex);
 }
 
-// Color tags for a photo, computed on the phone: the photo is shrunk, decoded
-// in JavaScript, and its main colors matched to the presets. A cut-out (a
-// transparent PNG of just the item) is read as a PNG so only the item counts.
+// Color and color season tags for a photo, computed on the phone: the photo is
+// shrunk, decoded in JavaScript, and its main colors matched to the presets. A
+// cut-out (a transparent PNG of just the item) is read as a PNG so only the item counts.
 export async function photoColorTags(uri: string, { cutout = false } = {}): Promise<Tag[]> {
   try {
     const context = ImageManipulator.manipulate(uri).resize({ width: SAMPLE_SIZE });
@@ -142,10 +177,7 @@ export async function photoColorTags(uri: string, { cutout = false } = {}): Prom
       const result = await image.saveAsync({ format: SaveFormat.PNG, base64: true });
       const decoded = result.base64 ? decodePng(base64ToBytes(result.base64)) : null;
       if (!decoded) return [];
-      return dominantCutoutColors(decoded.data, decoded.width, decoded.height).map((value) => ({
-        group: 'Color',
-        value,
-      }));
+      return colorTags(topColors(cutoutPixels(decoded.data, decoded.width, decoded.height)));
     }
     const result = await image.saveAsync({ format: SaveFormat.JPEG, base64: true, compress: 0.9 });
     if (!result.base64) return [];
@@ -153,7 +185,7 @@ export async function photoColorTags(uri: string, { cutout = false } = {}): Prom
       useTArray: true,
       formatAsRGBA: true,
     });
-    return dominantColors(data, width, height).map((value) => ({ group: 'Color', value }));
+    return colorTags(topColors(photoPixels(data, width, height)));
   } catch {
     return [];
   }

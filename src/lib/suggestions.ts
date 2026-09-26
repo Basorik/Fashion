@@ -23,8 +23,14 @@ export async function suggestOutfits(
 ): Promise<Suggestion[]> {
   const [outfits, rows] = await Promise.all([
     listOutfits(db),
-    db.getAllAsync<{ outfitId: number; category: string; seasons: string | null }>(
+    db.getAllAsync<{
+      outfitId: number;
+      category: string;
+      removed: number;
+      seasons: string | null;
+    }>(
       `SELECT outfit_items.outfit_id AS outfitId, items.category,
+         items.removed_on IS NOT NULL AS removed,
          (SELECT group_concat(value) FROM item_tags
           WHERE item_id = items.id AND tag_group = 'Season') AS seasons
        FROM outfit_items JOIN items ON items.id = outfit_items.item_id`,
@@ -32,6 +38,8 @@ export async function suggestOutfits(
   ]);
 
   const byOutfit = new Map<number, { categories: Set<string>; seasons: Set<string> }>();
+  // Outfits with an item that's been removed from the wardrobe can't be worn.
+  const incomplete = new Set(rows.filter((row) => row.removed).map((row) => row.outfitId));
   for (const row of rows) {
     const entry = byOutfit.get(row.outfitId) ?? { categories: new Set(), seasons: new Set() };
     entry.categories.add(row.category);
@@ -46,8 +54,10 @@ export async function suggestOutfits(
   const wet = weather ? weather.rainChance >= 50 : false;
 
   const scored = outfits
-    // Outfits already worn today aren't suggested again.
-    .filter((outfit) => byOutfit.has(outfit.id) && outfit.lastWorn !== now)
+    // Outfits already worn today aren't suggested again, nor ones missing an item.
+    .filter(
+      (outfit) => byOutfit.has(outfit.id) && !incomplete.has(outfit.id) && outfit.lastWorn !== now,
+    )
     .map((outfit) => {
       const { categories, seasons } = byOutfit.get(outfit.id)!;
       const reasons: string[] = [];
