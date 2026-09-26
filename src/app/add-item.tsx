@@ -3,8 +3,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
+import { Button } from '@/components/button';
 import { CategoryChips } from '@/components/category-chips';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -134,34 +135,6 @@ export default function AddItemScreen() {
   );
 }
 
-function Button({
-  label,
-  onPress,
-  disabled,
-  primary,
-}: {
-  label: string;
-  onPress: () => void;
-  disabled?: boolean;
-  primary?: boolean;
-}) {
-  const theme = useTheme();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      disabled={disabled}
-      onPress={onPress}
-      style={[
-        styles.button,
-        { backgroundColor: primary ? theme.text : theme.backgroundElement, opacity: disabled ? 0.4 : 1 },
-      ]}>
-      <ThemedText type="smallBold" style={{ color: primary ? theme.background : theme.text }}>
-        {label}
-      </ThemedText>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -197,12 +170,5 @@ const styles = StyleSheet.create({
   },
   error: {
     color: '#D93036',
-  },
-  button: {
-    flex: 1,
-    alignItems: 'center',
-    borderRadius: 8,
-    paddingVertical: Spacing.three,
-    marginTop: Spacing.two,
   },
 });

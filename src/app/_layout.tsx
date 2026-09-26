@@ -10,9 +10,11 @@ export default function RootLayout() {
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <SQLiteProvider databaseName={DATABASE_NAME} onInit={migrate}>
         <Stack>
-          <Stack.Screen name="index" options={{ title: 'Wardrobe' }} />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false, title: 'Back' }} />
           <Stack.Screen name="add-item" options={{ title: 'Add item', presentation: 'modal' }} />
           <Stack.Screen name="item/[id]" options={{ title: '' }} />
+          <Stack.Screen name="new-outfit" options={{ title: 'New outfit', presentation: 'modal' }} />
+          <Stack.Screen name="outfit/[id]" options={{ title: '' }} />
         </Stack>
       </SQLiteProvider>
     </ThemeProvider>

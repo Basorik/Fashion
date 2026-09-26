@@ -1,14 +1,23 @@
 import { Image } from 'expo-image';
-import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { Link, router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
+import { Stat } from '@/components/stat';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { deleteItem, getItem, logWear, today, undoLastWear, type ItemWithStats } from '@/lib/db';
+import {
+  deleteItem,
+  getItem,
+  listWornWith,
+  logWear,
+  today,
+  undoLastWear,
+  type ItemWithStats,
+} from '@/lib/db';
 import { deletePhoto, photoUri } from '@/lib/photos';
 
 export default function ItemScreen() {
@@ -17,9 +26,11 @@ export default function ItemScreen() {
   const db = useSQLiteContext();
   const theme = useTheme();
   const [item, setItem] = useState<ItemWithStats | null>(null);
+  const [wornWith, setWornWith] = useState<Awaited<ReturnType<typeof listWornWith>>>([]);
 
   const load = useCallback(() => {
     getItem(db, itemId).then(setItem);
+    listWornWith(db, itemId).then(setWornWith);
   }, [db, itemId]);
 
   useFocusEffect(load);
@@ -86,6 +97,36 @@ export default function ItemScreen() {
           </ThemedText>
         </Pressable>
 
+        {wornWith.length > 0 && (
+          <>
+            <ThemedText type="smallBold" style={styles.sectionTitle}>
+              Most often worn with
+            </ThemedText>
+            <View style={styles.pairs}>
+              {wornWith.map((other) => (
+                <Link
+                  key={other.id}
+                  href={{ pathname: '/item/[id]', params: { id: other.id } }}
+                  asChild>
+                  <Pressable accessibilityLabel={other.name} style={styles.pair}>
+                    <Image
+                      source={{ uri: photoUri(other.photo) }}
+                      style={[styles.pairPhoto, { backgroundColor: theme.backgroundElement }]}
+                      contentFit="cover"
+                    />
+                    <ThemedText type="small" numberOfLines={1}>
+                      {other.name}
+                    </ThemedText>
+                    <ThemedText type="small" themeColor="textSecondary">
+                      {other.times}× together
+                    </ThemedText>
+                  </Pressable>
+                </Link>
+              ))}
+            </View>
+          </>
+        )}
+
         <Pressable accessibilityRole="button" onPress={confirmDelete} style={styles.deleteButton}>
           <ThemedText type="small" style={styles.deleteText}>
             Delete item
@@ -93,18 +134,6 @@ export default function ItemScreen() {
         </Pressable>
       </ScrollView>
     </ThemedView>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  const theme = useTheme();
-  return (
-    <View style={[styles.stat, { backgroundColor: theme.backgroundElement }]}>
-      <ThemedText type="smallBold">{value}</ThemedText>
-      <ThemedText type="small" themeColor="textSecondary">
-        {label}
-      </ThemedText>
-    </View>
   );
 }
 
@@ -125,11 +154,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Spacing.two,
   },
-  stat: {
+  sectionTitle: {
+    marginTop: Spacing.two,
+  },
+  pairs: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  pair: {
     flex: 1,
+    maxWidth: '33%',
+  },
+  pairPhoto: {
+    width: '100%',
+    aspectRatio: 4 / 5,
     borderRadius: 8,
-    padding: Spacing.three,
-    gap: Spacing.one,
+    marginBottom: Spacing.one,
   },
   button: {
     alignItems: 'center',

@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { Link, Stack, useFocusEffect } from 'expo-router';
+import { Link, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
@@ -33,17 +33,6 @@ export default function WardrobeScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <Stack.Screen
-        options={{
-          headerRight: () => (
-            <Link href="/add-item" asChild>
-              <Pressable accessibilityLabel="Add item" hitSlop={12}>
-                <ThemedText style={styles.addButton}>+</ThemedText>
-              </Pressable>
-            </Link>
-          ),
-        }}
-      />
       <View>
         <CategoryChips selected={category} onSelect={setCategory} />
       </View>
@@ -91,11 +80,6 @@ export default function WardrobeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  addButton: {
-    fontSize: 28,
-    lineHeight: 32,
-    paddingHorizontal: Spacing.two,
   },
   grid: {
     padding: Spacing.three,
